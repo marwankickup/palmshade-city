@@ -20,6 +20,9 @@ import { buildDossier } from './vendor/makefun-game.ts';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
+const ENTRY_TITLE = 'Palmshade City';
+console.log(`Packing entry: ${ENTRY_TITLE} — an original open-world crime game for make.fun gta6-01`);
+
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
