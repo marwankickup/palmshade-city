@@ -1,19 +1,158 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Palmshade City</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1210; }
+  body { font-family: "Segoe UI", Verdana, system-ui, sans-serif; color: #fff; }
+  canvas.webgl { position: fixed; inset: 0; display: block; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background: radial-gradient(ellipse at center, transparent 58%, rgba(20,8,4,0.42) 100%); }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+  #minimap { position: absolute; top: 14px; left: 14px; width: 216px; height: 216px;
+    border: 2px solid rgba(255,255,255,0.55); border-radius: 10px; background: #20242c;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
+  #topbar { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #stars { font-size: 30px; letter-spacing: 3px; line-height: 1; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+  #stars .on { color: #ffd60a; }
+  #stars .off { color: rgba(255,255,255,0.22); }
+  #money { font-size: 26px; font-weight: 700; color: #7be495; text-shadow: 0 2px 6px rgba(0,0,0,0.65); margin-top: 2px; }
+  #packages { font-size: 14px; color: #a7f3c9; text-shadow: 0 1px 4px rgba(0,0,0,0.7); margin-top: 2px; }
+  #objective { position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    max-width: 46%; background: rgba(12,14,20,0.62); border: 1px solid rgba(255,214,10,0.55);
+    color: #ffe97a; padding: 8px 18px; border-radius: 999px; font-size: 16px; font-weight: 600;
+    text-align: center; display: none; backdrop-filter: blur(3px); }
+  #banner { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); text-align: center; display: none; }
+  #banner .big { font-size: 34px; font-weight: 800; letter-spacing: 3px; color: #ffd60a; text-shadow: 0 3px 10px rgba(0,0,0,0.7); }
+  #banner .small { font-size: 16px; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.8); margin-top: 2px; }
+  #dialogue { position: absolute; bottom: 118px; left: 50%; transform: translateX(-50%); width: min(680px, 86%);
+    background: rgba(10,12,18,0.78); border-left: 4px solid #ffd60a; border-radius: 8px;
+    padding: 10px 16px; display: none; backdrop-filter: blur(3px); }
+  #dialogue .who { color: #ffd60a; font-weight: 700; font-size: 14px; letter-spacing: 1px; }
+  #dialogue .line { font-size: 17px; margin-top: 2px; line-height: 1.35; }
+  #prompt { position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%);
+    background: rgba(12,14,20,0.7); padding: 7px 16px; border-radius: 999px; font-size: 15px;
+    display: none; white-space: nowrap; }
+  #prompt b { color: #ffd60a; }
+  #bars { position: absolute; left: 16px; bottom: 16px; width: 230px; }
+  .barlabel { font-size: 11px; letter-spacing: 2px; opacity: 0.85; text-shadow: 0 1px 3px #000; }
+  .bar { height: 13px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 7px; overflow: hidden; margin: 3px 0 8px; }
+  .bar > div { height: 100%; transition: width 0.15s; }
+  #healthfill { background: linear-gradient(90deg, #e23b2e, #ff7a59); width: 100%; }
+  #carfill { background: linear-gradient(90deg, #3b82f6, #7cc4ff); width: 100%; }
+  #carbar { display: none; }
+  #speedo { position: absolute; right: 20px; bottom: 14px; text-align: right; display: none; }
+  #speedo .num { font-size: 44px; font-weight: 800; text-shadow: 0 3px 8px rgba(0,0,0,0.65); line-height: 1; }
+  #speedo .unit { font-size: 13px; letter-spacing: 3px; opacity: 0.85; }
+  #bustedwrap { position: absolute; top: 21%; left: 50%; transform: translateX(-50%); width: 340px;
+    text-align: center; display: none; }
+  #bustedwrap .lbl { font-size: 20px; font-weight: 800; letter-spacing: 6px; color: #ff5147;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  #bustedbar { height: 12px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,81,71,0.8);
+    border-radius: 6px; overflow: hidden; margin-top: 6px; }
+  #bustedfill { height: 100%; background: #ff5147; width: 0%; }
+  #crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px;
+    border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 5px rgba(0,0,0,0.9); display: none; }
+
+  /* ---------- overlays / menus ---------- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(23,10,6,0.25), rgba(23,10,6,0.55)); }
+  .panel { text-align: center; background: rgba(14,16,24,0.82); border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 16px; padding: 34px 46px; box-shadow: 0 18px 60px rgba(0,0,0,0.55); backdrop-filter: blur(5px);
+    max-width: min(620px, 92vw); }
+  .title { font-size: 54px; font-weight: 900; letter-spacing: 2px; line-height: 1.02;
+    background: linear-gradient(180deg, #ffe97a 15%, #ff8c42 60%, #ef476f);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 14px rgba(0,0,0,0.55)); }
+  .subtitle { margin-top: 8px; font-size: 16px; color: #ffd9a0; letter-spacing: 1px; }
+  .btn { pointer-events: auto; display: block; margin: 12px auto 0; width: 250px; padding: 12px 0;
+    font-size: 18px; font-weight: 700; letter-spacing: 1px; color: #14100c; background: linear-gradient(180deg, #ffd60a, #ff9e2c);
+    border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+  .btn:hover { filter: brightness(1.1); }
+  .btn.ghost { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.35); }
+  .controls { margin-top: 20px; font-size: 13.5px; line-height: 1.75; color: rgba(255,255,255,0.85); }
+  .controls b { color: #ffd60a; font-weight: 700; }
+  .bigword { font-size: 52px; font-weight: 900; letter-spacing: 8px; }
+  #busted .bigword { color: #ff5147; text-shadow: 0 4px 18px rgba(255,30,20,0.4); }
+  #wasted .bigword { color: #c9ced6; text-shadow: 0 4px 18px rgba(0,0,0,0.8); }
+  .fine { margin-top: 8px; font-size: 17px; color: #ffd9a0; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<div id="vignette"></div>
+
+<div id="hud">
+  <canvas id="minimap" width="216" height="216"></canvas>
+  <div id="topbar">
+    <div id="stars"><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span></div>
+    <div id="money">$0</div>
+    <div id="packages">📦 0 / 10 packages</div>
+  </div>
+  <div id="objective"></div>
+  <div id="banner"><div class="big"></div><div class="small"></div></div>
+  <div id="bustedwrap"><div class="lbl">BUSTED</div><div id="bustedbar"><div id="bustedfill"></div></div></div>
+  <div id="dialogue"><div class="who"></div><div class="line"></div></div>
+  <div id="prompt"></div>
+  <div id="bars">
+    <div class="barlabel">HEALTH</div>
+    <div class="bar"><div id="healthfill"></div></div>
+    <div id="carbar">
+      <div class="barlabel">VEHICLE</div>
+      <div class="bar"><div id="carfill"></div></div>
+    </div>
+  </div>
+  <div id="speedo"><div class="num">0</div><div class="unit">MPH</div></div>
+  <div id="crosshair"></div>
+</div>
+
+<div class="overlay" id="menu">
+  <div class="panel">
+    <div class="title">PALMSHADE<br>CITY</div>
+    <div class="subtitle">Sun, sand and stolen vans — a tiny open-world crime story.</div>
+    <button class="btn" id="btn-play">▶ &nbsp;PLAY</button>
+    <button class="btn ghost" id="btn-continue" style="display:none">CONTINUE</button>
+    <div class="controls">
+      <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> camera (click the game to lock)<br>
+      <b>E</b> enter car / talk &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> handbrake<br>
+      <b>Click</b> shoot on foot &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; Find the 10 hidden 📦
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pause">
+  <div class="panel">
+    <div class="bigword" style="color:#ffd60a; font-size:40px;">PAUSED</div>
+    <button class="btn" id="btn-resume">RESUME</button>
+    <button class="btn ghost" id="btn-save">SAVE GAME</button>
+    <button class="btn ghost" id="btn-tomenu">MAIN MENU</button>
+  </div>
+</div>
+
+<div class="overlay" id="busted">
+  <div class="panel">
+    <div class="bigword">BUSTED</div>
+    <div class="fine" id="busted-fine">The Palmshade PD impounded your ride.</div>
+    <button class="btn" id="btn-busted-ok">CONTINUE</button>
+  </div>
+</div>
+
+<div class="overlay" id="wasted">
+  <div class="panel">
+    <div class="bigword">WASTED</div>
+    <div class="fine" id="wasted-fine">You woke up outside the police station.</div>
+    <button class="btn" id="btn-wasted-ok">CONTINUE</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
