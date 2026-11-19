@@ -3,17 +3,159 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<title>Palmshade City</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a0f1e;
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif; color: #fff;
+    -webkit-user-select: none; user-select: none; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #mapwrap { position: absolute; top: 14px; left: 14px; text-align: center; }
+  #minimap { width: 176px; height: 176px; border-radius: 12px;
+    border: 2px solid rgba(255,255,255,.55); box-shadow: 0 4px 18px rgba(0,0,0,.45);
+    background: #20303a; }
+  #maplabel { margin-top: 3px; font-size: 11px; letter-spacing: 3px; font-weight: 700;
+    color: #ffe9c4; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+  #stats { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #stars { font-size: 26px; letter-spacing: 3px; line-height: 1; height: 28px;
+    text-shadow: 0 2px 6px rgba(0,0,0,.7); }
+  #stars .on { color: #ffd23e; } #stars .off { color: rgba(255,255,255,.28); }
+  #money { font-size: 30px; font-weight: 800; color: #7dff8a;
+    text-shadow: 0 2px 6px rgba(0,0,0,.75); }
+  .bar { width: 190px; height: 11px; margin: 5px 0 2px auto; border-radius: 6px;
+    background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); overflow: hidden; }
+  .bar > div { height: 100%; width: 100%; transition: width .18s; }
+  #healthfill { background: linear-gradient(90deg, #ff5d5d, #ff9d5c); }
+  #carfill { background: linear-gradient(90deg, #57c8ff, #7dffd4); }
+  .barlabel { font-size: 9px; letter-spacing: 2px; color: rgba(255,255,255,.85);
+    text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  #packages { margin-top: 6px; font-size: 14px; font-weight: 700; color: #ffd9a0;
+    text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+
+  #banner { position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    max-width: 560px; text-align: center; }
+  #dialogue { display: inline-block; background: rgba(16,10,24,.78); border: 1px solid rgba(255,210,140,.5);
+    border-radius: 10px; padding: 8px 16px; font-size: 16px; line-height: 1.35;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  #dialogue .who { color: #ffb35c; font-weight: 800; margin-right: 6px; }
+  #objective { margin-top: 8px; display: inline-block; background: rgba(255,178,44,.92); color: #241300;
+    font-weight: 800; font-size: 14px; padding: 5px 14px; border-radius: 999px;
+    box-shadow: 0 3px 10px rgba(0,0,0,.35); }
+  #objective:empty { display: none; }
+
+  #prompt { position: absolute; bottom: 128px; left: 50%; transform: translateX(-50%);
+    background: rgba(16,10,24,.8); padding: 7px 16px; border-radius: 999px; font-size: 15px;
+    border: 1px solid rgba(255,255,255,.35); }
+  #prompt b { color: #ffd23e; }
+  #speedo { position: absolute; right: 22px; bottom: 18px; text-align: right;
+    text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+  #speedo .num { font-size: 44px; font-weight: 800; }
+  #speedo .unit { font-size: 13px; letter-spacing: 2px; color: rgba(255,255,255,.85); }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px;
+    border-radius: 50%; background: rgba(255,255,255,.9); box-shadow: 0 0 6px rgba(0,0,0,.9); }
+  #bustedwrap { position: absolute; left: 50%; bottom: 190px; transform: translateX(-50%);
+    width: 260px; text-align: center; }
+  #bustedwrap .lbl { font-weight: 800; letter-spacing: 4px; color: #ff6b6b;
+    text-shadow: 0 2px 6px rgba(0,0,0,.85); margin-bottom: 4px; }
+  #bustedbar { height: 12px; border-radius: 6px; background: rgba(0,0,0,.6);
+    border: 1px solid rgba(255,255,255,.6); overflow: hidden; }
+  #bustedfill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffb02e, #ff4040); }
+  #toast { position: absolute; left: 50%; bottom: 240px; transform: translateX(-50%);
+    font-size: 22px; font-weight: 800; color: #7dff8a; text-shadow: 0 2px 8px rgba(0,0,0,.85); }
+
+  /* ---------- Overlays ---------- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(ellipse at 50% 120%, rgba(255,122,61,.35), rgba(10,6,18,.88) 65%); }
+  .overlay h1 { font-size: 74px; margin: 0; letter-spacing: 2px; font-weight: 900;
+    background: linear-gradient(180deg, #ffe9a8, #ff8a3d 70%, #ff5e7a);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 14px rgba(0,0,0,.6)); }
+  .overlay h2 { font-size: 44px; margin: 0 0 6px; letter-spacing: 3px; }
+  .overlay p { margin: 4px 0; color: #ffe9c4; font-size: 16px; max-width: 520px; line-height: 1.45; }
+  .btn { pointer-events: auto; cursor: pointer; margin-top: 14px; border: none; border-radius: 999px;
+    padding: 13px 44px; font-size: 19px; font-weight: 800; letter-spacing: 1px;
+    color: #2a1503; background: linear-gradient(180deg, #ffd23e, #ff8a3d);
+    box-shadow: 0 6px 20px rgba(255,138,61,.45); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: rgba(255,255,255,.14); color: #fff; box-shadow: none;
+    border: 1px solid rgba(255,255,255,.5); font-size: 16px; padding: 10px 30px; }
+  .controls { margin-top: 20px; font-size: 13.5px; color: rgba(255,255,255,.85); line-height: 1.7; }
+  .controls b { color: #ffd23e; }
+  #menu .tag { font-size: 17px; color: #ffd9a0; letter-spacing: 4px; margin-top: 2px; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game" aria-label="Palmshade City: a 3D open-world crime game"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="mapwrap">
+    <canvas id="minimap" width="176" height="176"></canvas>
+    <div id="maplabel">PALMSHADE CITY</div>
+  </div>
+  <div id="stats">
+    <div id="stars"><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span><span class="off">★</span></div>
+    <div id="money">$0</div>
+    <div class="bar"><div id="healthfill"></div></div>
+    <div class="barlabel">HEALTH</div>
+    <div id="carbar">
+      <div class="bar"><div id="carfill"></div></div>
+      <div class="barlabel">CAR</div>
+    </div>
+    <div id="packages">▣ PACKAGES 0/10</div>
+  </div>
+  <div id="banner">
+    <div id="dialogue" class="hidden"><span class="who"></span><span class="line"></span></div>
+    <div id="objective"></div>
+  </div>
+  <div id="crosshair" class="hidden"></div>
+  <div id="bustedwrap" class="hidden">
+    <div class="lbl">BUSTED</div>
+    <div id="bustedbar"><div id="bustedfill"></div></div>
+  </div>
+  <div id="toast" class="hidden"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="speedo" class="hidden"><span class="num">0</span> <span class="unit">KM/H</span></div>
+</div>
+
+<div id="menu" class="overlay">
+  <h1>PALMSHADE CITY</h1>
+  <div class="tag">SUN · SAND · SIRENS</div>
+  <p>An open-world crime caper on the golden coast. Run deliveries for Marisol,
+     outrun the Palmshade PD, and keep the Breakwater Boys out of the bay.</p>
+  <button class="btn" id="playbtn">▶ PLAY</button>
+  <button class="btn ghost hidden" id="continuebtn">CONTINUE</button>
+  <div class="controls">
+    <b>WASD</b> move / drive · <b>Mouse</b> camera · <b>Click</b> shoot (on foot)<br>
+    <b>E</b> enter / exit car · <b>Shift</b> sprint / boost · <b>Space</b> handbrake · <b>P</b> pause
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <h2>PAUSED</h2>
+  <button class="btn" id="resumebtn">RESUME</button>
+  <button class="btn ghost" id="savebtn">SAVE GAME</button>
+  <button class="btn ghost" id="quitbtn">QUIT TO MENU</button>
+</div>
+
+<div id="busted" class="overlay hidden">
+  <h2 style="color:#ff6b6b">BUSTED!</h2>
+  <p id="bustedtext">The Palmshade PD got you.</p>
+  <button class="btn" id="bustedbtn">RESPAWN</button>
+</div>
+
+<div id="wasted" class="overlay hidden">
+  <h2 style="color:#ff4040">WASTED</h2>
+  <p id="wastedtext">You wake up outside Palmshade General.</p>
+  <button class="btn" id="wastedbtn">RESPAWN</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

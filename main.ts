@@ -17,6 +17,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
+// The entry being handed in: Palmshade City, an original open-world crime
+// game (three.js, vendored under game/) built for the gta6-01 bounty.
+const ENTRY_TITLE = 'Palmshade City';
+console.log(`handing in: ${ENTRY_TITLE}`);
+
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
