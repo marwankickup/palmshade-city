@@ -17,12 +17,6 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-// Palmshade City — an original open-world crime caper in the browser:
-// a sun-soaked coastal city, cars to steal, Palmshade PD to outrun, and
-// five jobs for Marisol Vega of Café Solano. This program hands it in.
-const ENTRY_TITLE = 'Palmshade City';
-console.log(`handing in: ${ENTRY_TITLE}`);
-
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 

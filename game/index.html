@@ -1,152 +1,19 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Palmshade City — an open-world crime caper</title>
+<title>Block Dodger</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a0f14; }
-  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #fff; }
-  #game { position: fixed; inset: 0; }
-  #game canvas { display: block; }
-  .hidden { display: none !important; }
-
-  /* ---------- HUD ---------- */
-  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-  #mapWrap { position: absolute; top: 14px; left: 14px; text-align: center; }
-  #minimap { width: 176px; height: 176px; border: 3px solid rgba(10,20,28,.85); border-radius: 10px;
-             box-shadow: 0 4px 18px rgba(0,0,0,.45); background: #17394d; }
-  #mapLabel { margin-top: 3px; font-size: 11px; font-weight: 700; letter-spacing: 2.5px; color: #ffe9b0;
-              text-shadow: 0 1px 3px #000; }
-  #stats { position: absolute; top: 14px; right: 16px; text-align: right; }
-  #stars { font-size: 30px; letter-spacing: 3px; line-height: 1; height: 34px;
-           color: #ffd94d; text-shadow: 0 0 6px rgba(255,180,0,.8), 0 2px 3px #000; }
-  #stars .off { color: rgba(255,255,255,.22); text-shadow: none; }
-  #money { font-size: 27px; font-weight: 800; color: #8dff6e; text-shadow: 0 2px 4px #000; margin-top: 2px; }
-  #healthWrap { margin-left: auto; margin-top: 6px; width: 168px; height: 13px; background: rgba(0,0,0,.55);
-                border: 2px solid rgba(255,255,255,.5); border-radius: 7px; overflow: hidden; }
-  #healthFill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5a3c, #ffb52e); transition: width .18s; }
-  #healthLabel { font-size: 10px; letter-spacing: 2px; color: #ffd9c9; text-shadow: 0 1px 2px #000; margin-top: 2px; }
-  #banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: min(620px, 56vw); text-align: center; }
-  #dialogue { background: rgba(12,18,26,.78); border-left: 5px solid #ffb52e; border-radius: 8px;
-              padding: 9px 14px; font-size: 16.5px; line-height: 1.35; text-align: left;
-              box-shadow: 0 4px 16px rgba(0,0,0,.4); min-height: 22px; }
-  #objective { margin-top: 8px; display: inline-block; background: rgba(12,18,26,.66); border-radius: 20px;
-               padding: 6px 16px; font-size: 15.5px; font-weight: 600; color: #ffe9b0; text-shadow: 0 1px 2px #000; }
-  #objective .dist { color: #8fd8ff; font-weight: 800; }
-  #prompt { position: absolute; bottom: 108px; left: 50%; transform: translateX(-50%);
-            background: rgba(12,18,26,.8); padding: 8px 20px; border-radius: 22px; font-size: 17px; font-weight: 700; }
-  #prompt .key { background: #ffd94d; color: #221a08; border-radius: 5px; padding: 1px 8px; margin-right: 6px; }
-  #speedo { position: absolute; right: 20px; bottom: 18px; text-align: right; }
-  #speedVal { font-size: 40px; font-weight: 900; text-shadow: 0 2px 5px #000; }
-  #speedo .unit { font-size: 13px; letter-spacing: 2px; color: #ffd9c9; }
-  #bustedWrap { position: absolute; bottom: 168px; left: 50%; transform: translateX(-50%); width: 300px; text-align: center; }
-  #bustedLabel { font-size: 21px; font-weight: 900; letter-spacing: 5px; color: #ff5347; text-shadow: 0 0 9px rgba(255,40,30,.8), 0 2px 3px #000; }
-  #bustedBar { height: 11px; background: rgba(0,0,0,.6); border: 2px solid rgba(255,255,255,.55); border-radius: 6px; overflow: hidden; margin-top: 4px; }
-  #bustedFill { height: 100%; width: 0%; background: linear-gradient(90deg, #2266ff, #ff2222); }
-  #crosshair { position: absolute; top: 50%; left: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); opacity: .9; }
-  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
-  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
-  #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
-  #toast { position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%); font-size: 34px; font-weight: 900;
-           color: #8dff6e; text-shadow: 0 2px 8px #000; opacity: 0; transition: opacity .3s; }
-  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
-              background: radial-gradient(ellipse at center, transparent 52%, rgba(200,20,10,.55) 100%); }
-
-  /* ---------- overlays / menus ---------- */
-  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
-             justify-content: center; text-align: center; padding: 20px; }
-  #menu { background: linear-gradient(180deg, rgba(38,16,40,.25) 0%, rgba(38,16,40,.55) 78%, rgba(20,8,18,.88) 100%); }
-  #menu .kicker { font-size: 15px; letter-spacing: 6px; color: #ffd94d; font-weight: 700; text-shadow: 0 2px 6px #000; }
-  #menu h1 { font-size: clamp(46px, 9vw, 96px); font-weight: 900; letter-spacing: 2px; line-height: .95; margin: 8px 0 2px;
-             color: #fff; text-shadow: 0 4px 0 #e84f3d, 0 8px 26px rgba(0,0,0,.65); }
-  #menu h1 .alt { color: #ffd94d; text-shadow: 0 4px 0 #b55a12, 0 8px 26px rgba(0,0,0,.65); }
-  #menu .tag { font-size: 18px; color: #ffe9d9; text-shadow: 0 2px 5px #000; margin-bottom: 22px; }
-  .btn { pointer-events: auto; cursor: pointer; border: none; border-radius: 10px; padding: 13px 42px; margin: 5px;
-         font-size: 20px; font-weight: 800; letter-spacing: 1px; color: #221a08; background: linear-gradient(180deg, #ffd94d, #ffb52e);
-         box-shadow: 0 5px 0 #b55a12, 0 9px 20px rgba(0,0,0,.45); transition: transform .06s, box-shadow .06s; }
-  .btn:hover { transform: translateY(-1px); }
-  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #b55a12; }
-  .btn.ghost { background: rgba(16,24,34,.75); color: #ffe9b0; box-shadow: 0 5px 0 rgba(0,0,0,.6); font-size: 16.5px; padding: 10px 30px; }
-  #controls { margin-top: 24px; background: rgba(10,16,24,.62); border-radius: 12px; padding: 13px 22px;
-              font-size: 14.5px; line-height: 1.75; color: #dfeaf2; max-width: 520px; }
-  #controls b { color: #ffd94d; }
-  #menu .foot { margin-top: 16px; font-size: 12.5px; color: rgba(255,255,255,.65); letter-spacing: 1px; }
-  .panel { background: rgba(10,16,24,.88); border: 2px solid rgba(255,217,77,.5); border-radius: 16px; padding: 30px 44px;
-           box-shadow: 0 18px 50px rgba(0,0,0,.6); }
-  .panel h2 { font-size: 40px; font-weight: 900; letter-spacing: 2px; margin-bottom: 8px; }
-  .panel p { font-size: 16.5px; color: #dfeaf2; margin-bottom: 18px; line-height: 1.45; }
-  #endScreen h2.bustedT { color: #ff5347; text-shadow: 0 0 18px rgba(255,40,30,.5); }
-  #endScreen h2.wastedT { color: #c9d4dd; text-shadow: 0 0 18px rgba(160,180,200,.5); }
-  #saveNote { font-size: 13.5px; color: #8dff6e; height: 18px; margin-top: 8px; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* Read aloud, never shown: the status line screen readers announce. */
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
 <body>
-<div id="game"></div>
-
-<div id="hud" class="hidden">
-  <div id="mapWrap">
-    <canvas id="minimap" width="176" height="176"></canvas>
-    <div id="mapLabel">PALMSHADE CITY</div>
-  </div>
-  <div id="stats">
-    <div id="stars"></div>
-    <div id="money">$0</div>
-    <div id="healthWrap"><div id="healthFill"></div></div>
-    <div id="healthLabel">HEALTH</div>
-  </div>
-  <div id="banner">
-    <div id="dialogue" class="hidden"></div>
-    <div id="objective" class="hidden"></div>
-  </div>
-  <div id="bustedWrap" class="hidden">
-    <div id="bustedLabel">BUSTED</div>
-    <div id="bustedBar"><div id="bustedFill"></div></div>
-  </div>
-  <div id="prompt" class="hidden"></div>
-  <div id="speedo" class="hidden"><span id="speedVal">0</span> <span class="unit">MPH</span></div>
-  <div id="crosshair" class="hidden"></div>
-  <div id="toast"></div>
-</div>
-<div id="vignette"></div>
-
-<div id="menu" class="overlay">
-  <div class="kicker">WELCOME TO</div>
-  <h1>PALMSHADE <span class="alt">CITY</span></h1>
-  <div class="tag">Sun, palms, and one very bad week for the Breakwater Boys.</div>
-  <button id="playBtn" class="btn">▶ &nbsp;NEW GAME</button>
-  <button id="continueBtn" class="btn ghost hidden">CONTINUE — <span id="continueInfo"></span></button>
-  <div id="controls">
-    <b>W A S D</b> walk / drive &nbsp;·&nbsp; <b>Mouse</b> drag or click view to look &nbsp;·&nbsp; <b>Shift</b> sprint<br>
-    <b>E</b> enter / exit car &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>Click</b> shoot (on foot)<br>
-    <b>P</b> or <b>Esc</b> pause &nbsp;·&nbsp; Follow the <b>gold marker</b> to start Marisol's jobs at Café Solano
-  </div>
-  <div class="foot">An original open-world caper · built with three.js · no downloads, no network — just you and the city</div>
-</div>
-
-<div id="pause" class="overlay hidden" style="background: rgba(8,10,16,.72)">
-  <div class="panel">
-    <h2>PAUSED</h2>
-    <p id="pauseStats"></p>
-    <button id="resumeBtn" class="btn">RESUME</button><br>
-    <button id="saveBtn" class="btn ghost">SAVE GAME</button>
-    <button id="menuBtn" class="btn ghost">QUIT TO MENU</button>
-    <div id="saveNote"></div>
-  </div>
-</div>
-
-<div id="endScreen" class="overlay hidden" style="background: rgba(8,6,10,.66)">
-  <div class="panel">
-    <h2 id="endTitle">BUSTED</h2>
-    <p id="endText"></p>
-    <button id="againBtn" class="btn">BACK TO THE STREETS</button>
-  </div>
-</div>
-
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
-</script>
+<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
