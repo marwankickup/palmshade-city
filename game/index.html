@@ -1,130 +1,19 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Palmshade City</title>
+<title>Block Dodger</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1210; font-family: "Segoe UI", Arial, sans-serif; }
-  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  .hidden { display: none !important; }
-
-  /* ---------- HUD ---------- */
-  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-  #minimap-wrap { position: absolute; top: 14px; left: 14px; border: 3px solid rgba(255,255,255,0.75); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
-  #minimap { display: block; width: 188px; height: 176px; }
-  #top-right { position: absolute; top: 14px; right: 18px; text-align: right; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
-  #stars { font-size: 30px; letter-spacing: 3px; color: #3a3f46; line-height: 1; }
-  #stars .on { color: #ffd23e; text-shadow: 0 0 9px rgba(255,210,62,0.8); }
-  #stars.flash { animation: starflash 0.4s ease-in-out 3; }
-  @keyframes starflash { 50% { transform: scale(1.18); } }
-  #money { font-size: 30px; font-weight: 800; color: #7be495; margin-top: 2px; }
-  #packages { font-size: 16px; font-weight: 700; color: #ffc65c; margin-top: 2px; }
-  #bars { position: absolute; left: 18px; bottom: 18px; width: 210px; color: #fff; }
-  .bar-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 1px 4px #000; margin: 5px 0 2px; }
-  .bar { height: 13px; background: rgba(0,0,0,0.55); border: 2px solid rgba(255,255,255,0.65); border-radius: 7px; overflow: hidden; }
-  .bar > div { height: 100%; width: 100%; transition: width 0.15s; }
-  #health-fill { background: linear-gradient(90deg, #e74c3c, #ff7a5c); }
-  #car-fill { background: linear-gradient(90deg, #2471a3, #5dade2); }
-  #speedo { position: absolute; right: 22px; bottom: 16px; color: #fff; text-align: right; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
-  #speedo .num { font-size: 52px; font-weight: 900; line-height: 0.95; }
-  #speedo .unit { font-size: 14px; font-weight: 700; letter-spacing: 3px; }
-  #objective { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: 560px; background: rgba(12,14,18,0.72); border: 2px solid rgba(255,210,62,0.85); color: #ffe9a8; border-radius: 999px; padding: 8px 20px; font-size: 16px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #mission-banner { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); color: #ffd23e; font-size: 30px; font-weight: 900; letter-spacing: 2px; text-shadow: 0 3px 12px rgba(0,0,0,0.85); opacity: 0; transition: opacity 0.4s; text-align: center; }
-  #dialogue { position: absolute; bottom: 108px; left: 50%; transform: translateX(-50%); width: min(620px, 86vw); background: rgba(10,12,16,0.82); border-left: 5px solid #ffd23e; border-radius: 8px; color: #fff; padding: 12px 18px; opacity: 0; transition: opacity 0.3s; }
-  #dialogue .who { color: #ffd23e; font-weight: 800; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
-  #dialogue .line { font-size: 18px; margin-top: 2px; }
-  #prompt { position: absolute; bottom: 178px; left: 50%; transform: translateX(-50%); background: rgba(10,12,16,0.8); color: #fff; border-radius: 8px; padding: 8px 16px; font-size: 16px; font-weight: 700; }
-  #prompt b { color: #ffd23e; }
-  #busted-wrap { position: absolute; bottom: 250px; left: 50%; transform: translateX(-50%); width: 320px; text-align: center; color: #ff5a4d; font-weight: 900; letter-spacing: 4px; font-size: 20px; text-shadow: 0 2px 8px #000; }
-  #busted-bar { height: 12px; background: rgba(0,0,0,0.6); border: 2px solid #ff5a4d; border-radius: 7px; overflow: hidden; margin-top: 4px; }
-  #busted-fill { height: 100%; width: 0%; background: #ff5a4d; }
-  #crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 6px rgba(0,0,0,0.9); }
-  #toast { position: absolute; bottom: 66px; left: 50%; transform: translateX(-50%); background: rgba(20,90,40,0.88); color: #d9ffe2; border-radius: 8px; padding: 9px 18px; font-size: 16px; font-weight: 700; opacity: 0; transition: opacity 0.3s; }
-  #vig { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 62%, rgba(20,8,4,0.42) 100%); z-index: 4; }
-
-  /* ---------- menus / overlays ---------- */
-  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; }
-  #menu { background: linear-gradient(180deg, rgba(38,20,54,0.55) 0%, rgba(146,64,24,0.45) 55%, rgba(20,10,8,0.78) 100%); }
-  #menu h1 { font-size: clamp(46px, 9vw, 96px); font-weight: 900; letter-spacing: 2px; line-height: 0.95; color: #ffd23e; text-shadow: 0 6px 0 #b3541e, 0 12px 34px rgba(0,0,0,0.7); }
-  #menu h2 { font-size: clamp(15px, 2.4vw, 22px); font-weight: 600; color: #ffe9c9; margin-top: 10px; text-shadow: 0 2px 8px #000; }
-  .btn { pointer-events: auto; cursor: pointer; margin-top: 26px; background: linear-gradient(180deg, #ffb347, #f39c12); border: none; border-radius: 999px; color: #3a1c00; font-size: 24px; font-weight: 900; letter-spacing: 1px; padding: 14px 54px; box-shadow: 0 6px 22px rgba(0,0,0,0.5); }
-  .btn:hover { filter: brightness(1.1); }
-  .btn.secondary { background: rgba(255,255,255,0.16); color: #fff; font-size: 18px; padding: 10px 36px; border: 2px solid rgba(255,255,255,0.6); }
-  #controls { margin-top: 30px; background: rgba(8,10,14,0.66); border-radius: 12px; padding: 14px 26px; font-size: 15px; line-height: 1.75; color: #e8e4da; }
-  #controls b { color: #ffd23e; }
-  .big-overlay { background: rgba(10,6,8,0.72); }
-  .big-overlay h1 { font-size: 84px; font-weight: 900; letter-spacing: 6px; }
-  #busted-screen h1 { color: #ff5a4d; text-shadow: 0 6px 30px rgba(255,40,20,0.5); }
-  #wasted-screen h1 { color: #c9ccd4; text-shadow: 0 6px 30px rgba(0,0,0,0.9); }
-  .big-overlay p { font-size: 19px; margin-top: 10px; color: #f0ead8; }
-  #pause { background: rgba(8,10,16,0.66); }
-  #pause h1 { font-size: 54px; letter-spacing: 4px; color: #ffd23e; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  /* Read aloud, never shown: the status line screen readers announce. */
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
 </head>
 <body>
-<canvas id="game-canvas"></canvas>
-<div id="vig"></div>
-
-<div id="hud" class="hidden">
-  <div id="minimap-wrap"><canvas id="minimap" width="220" height="206"></canvas></div>
-  <div id="top-right">
-    <div id="stars"></div>
-    <div id="money">$0</div>
-    <div id="packages">📦 0 / 10 packages</div>
-  </div>
-  <div id="objective">Talk to Marisol at Café Marisol</div>
-  <div id="mission-banner"></div>
-  <div id="dialogue"><div class="who"></div><div class="line"></div></div>
-  <div id="prompt" class="hidden"></div>
-  <div id="busted-wrap" class="hidden">BUSTED<div id="busted-bar"><div id="busted-fill"></div></div></div>
-  <div id="crosshair" class="hidden"></div>
-  <div id="bars">
-    <div class="bar-label">HEALTH</div>
-    <div class="bar"><div id="health-fill"></div></div>
-    <div id="car-row" class="hidden">
-      <div class="bar-label">VEHICLE</div>
-      <div class="bar"><div id="car-fill"></div></div>
-    </div>
-  </div>
-  <div id="speedo" class="hidden"><div class="num">0</div><div class="unit">MPH</div></div>
-  <div id="toast"></div>
-</div>
-
-<div id="menu" class="overlay">
-  <h1>PALMSHADE<br>CITY</h1>
-  <h2>Sun, sand and bad decisions — an open-world crime caper on the Palmshade coast.</h2>
-  <button id="play-btn" class="btn">▶ &nbsp;PLAY</button>
-  <button id="continue-btn" class="btn secondary hidden">CONTINUE</button>
-  <div id="controls">
-    <b>W A S D</b> move / drive &nbsp;•&nbsp; <b>Mouse</b> camera &nbsp;•&nbsp; <b>Click</b> shoot<br>
-    <b>E</b> talk / enter / exit car &nbsp;•&nbsp; <b>Shift</b> sprint &nbsp;•&nbsp; <b>Space</b> brake / jump<br>
-    <b>P</b> or <b>Esc</b> pause &nbsp;•&nbsp; <b>M</b> mute
-  </div>
-</div>
-
-<div id="pause" class="overlay hidden">
-  <h1>PAUSED</h1>
-  <button id="resume-btn" class="btn">RESUME</button>
-  <button id="restart-btn" class="btn secondary">RESTART DAY</button>
-</div>
-
-<div id="busted-screen" class="overlay big-overlay hidden">
-  <h1>BUSTED</h1>
-  <p id="busted-detail">The Palmshade PD hauled you in.</p>
-  <button id="busted-btn" class="btn">PAY FINE &amp; WALK OUT</button>
-</div>
-
-<div id="wasted-screen" class="overlay big-overlay hidden">
-  <h1>WASTED</h1>
-  <p id="wasted-detail">You woke up on the promenade with a headache.</p>
-  <button id="wasted-btn" class="btn">GET UP</button>
-</div>
-
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
-</script>
+<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
