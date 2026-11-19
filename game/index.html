@@ -1,19 +1,140 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Palmshade City</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1210; font-family: system-ui, 'Segoe UI', sans-serif; }
+  #game-canvas { position: fixed; inset: 0; display: block; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  #minimap-wrap { position: absolute; top: 14px; left: 14px; border: 3px solid rgba(20,16,12,0.75); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 18px rgba(0,0,0,0.45); }
+  #minimap { display: block; width: 190px; height: 190px; }
+  #packages { position: absolute; top: 212px; left: 14px; background: rgba(20,16,12,0.72); color: #7de8db;
+    padding: 5px 12px; border-radius: 8px; font-weight: 700; font-size: 15px; letter-spacing: 0.4px; }
+  #topright { position: absolute; top: 12px; right: 16px; text-align: right; }
+  #wanted { font-size: 30px; letter-spacing: 3px; color: #ffc93c; text-shadow: 0 2px 6px rgba(0,0,0,0.8); line-height: 1; }
+  #wanted .off { color: rgba(255,255,255,0.22); }
+  #money { font-size: 26px; font-weight: 800; color: #7ddb6a; text-shadow: 0 2px 5px rgba(0,0,0,0.85); margin-top: 2px; }
+  .barlabel { font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px #000; letter-spacing: 1px; margin-top: 6px; text-align: right; }
+  .bar { width: 190px; height: 11px; background: rgba(0,0,0,0.55); border: 1.5px solid rgba(255,255,255,0.5); border-radius: 6px; margin-left: auto; overflow: hidden; }
+  .bar > div { height: 100%; transition: width 0.15s; }
+  #healthfill { background: linear-gradient(90deg, #e84f3d, #f2765c); width: 100%; }
+  #carfill { background: linear-gradient(90deg, #3fa7d6, #6fc3e8); width: 100%; }
+  #objective { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); max-width: 46%;
+    background: rgba(20,16,12,0.78); color: #ffe9b0; padding: 8px 18px; border-radius: 999px;
+    font-size: 16px; font-weight: 700; text-align: center; border: 1.5px solid rgba(255,201,60,0.55);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #objdist { color: #7de8db; margin-left: 8px; }
+  #banner { position: absolute; bottom: 108px; left: 50%; transform: translateX(-50%); width: min(680px, 86%);
+    background: rgba(16,12,10,0.85); border-left: 5px solid #ffc93c; border-radius: 8px; padding: 10px 16px; color: #fff; }
+  #bannerName { color: #ffc93c; font-weight: 800; font-size: 14px; letter-spacing: 0.6px; text-transform: uppercase; }
+  #bannerText { font-size: 17px; margin-top: 2px; line-height: 1.35; }
+  #toast { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); background: rgba(46,143,134,0.92);
+    color: #fff; font-weight: 800; font-size: 18px; padding: 9px 22px; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  #prompt { position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7);
+    color: #fff; font-size: 16px; font-weight: 700; padding: 7px 16px; border-radius: 8px; }
+  #prompt b { color: #ffc93c; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.4); border-radius: 5px; padding: 0 7px; margin-right: 6px; }
+  #bustedwrap { position: absolute; top: 34%; left: 50%; transform: translateX(-50%); width: 300px; text-align: center; }
+  #bustedlabel { color: #ff5147; font-weight: 900; font-size: 22px; letter-spacing: 4px; text-shadow: 0 2px 8px #000; }
+  #bustedbar { height: 13px; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,81,71,0.8); border-radius: 7px; overflow: hidden; margin-top: 5px; }
+  #bustedfill { height: 100%; background: #ff5147; width: 0%; }
+  #speedo { position: absolute; bottom: 20px; right: 22px; text-align: right; color: #fff; text-shadow: 0 2px 6px #000; }
+  #speedo .num { font-size: 44px; font-weight: 900; line-height: 0.95; }
+  #speedo .unit { font-size: 14px; font-weight: 700; letter-spacing: 2px; color: #ffd98c; }
+  #crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+    border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 5px #000; }
+
+  /* ---------- overlays ---------- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #menu { background: linear-gradient(180deg, rgba(38,16,8,0.25) 0%, rgba(30,10,16,0.55) 78%, rgba(16,6,10,0.8) 100%); }
+  #title { font-size: clamp(46px, 9vw, 92px); font-weight: 900; letter-spacing: 2px; line-height: 0.95; text-align: center;
+    background: linear-gradient(180deg, #ffe9a8 15%, #ff9a5c 55%, #e84f7d 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 4px 0 rgba(90,20,40,0.55)) drop-shadow(0 10px 26px rgba(0,0,0,0.6)); }
+  #subtitle { color: #ffe9c4; font-size: clamp(15px, 2.4vw, 21px); font-weight: 600; margin: 10px 0 30px; text-shadow: 0 2px 8px #000; text-align: center; }
+  .btn { pointer-events: auto; cursor: pointer; border: none; border-radius: 12px; padding: 14px 44px; margin: 6px;
+    font-size: 21px; font-weight: 900; letter-spacing: 1px; color: #fff; background: linear-gradient(180deg, #f2765c, #d63d63);
+    box-shadow: 0 6px 0 #8e2545, 0 12px 24px rgba(0,0,0,0.5); transition: transform 0.06s, box-shadow 0.06s; }
+  .btn:hover { transform: translateY(2px); box-shadow: 0 4px 0 #8e2545, 0 8px 18px rgba(0,0,0,0.5); }
+  .btn.alt { background: linear-gradient(180deg, #3fa7d6, #2e6f8f); box-shadow: 0 6px 0 #1d4a5f, 0 12px 24px rgba(0,0,0,0.5); }
+  .btn.small { font-size: 16px; padding: 10px 28px; }
+  #controls { margin-top: 30px; color: rgba(255,240,220,0.92); font-size: 15px; line-height: 1.75; text-align: center; text-shadow: 0 1px 5px #000; }
+  #controls b { color: #ffc93c; }
+  .panel { background: rgba(18,12,10,0.88); border: 1.5px solid rgba(255,201,60,0.4); border-radius: 16px; padding: 30px 44px; text-align: center; box-shadow: 0 18px 50px rgba(0,0,0,0.6); }
+  .panel h2 { color: #ffe9a8; font-size: 34px; letter-spacing: 2px; margin-bottom: 8px; }
+  .panel p { color: #f2e4cc; margin-bottom: 16px; font-size: 16px; }
+  #bustedOv { background: rgba(30,4,4,0.55); }
+  #bustedOv h1 { font-size: 84px; font-weight: 900; letter-spacing: 10px; color: #ff5147; text-shadow: 0 6px 30px #000; }
+  #wastedOv { background: rgba(10,10,14,0.6); }
+  #wastedOv h1 { font-size: 84px; font-weight: 900; letter-spacing: 10px; color: #cfd4d9; text-shadow: 0 6px 30px #000; }
+  .ovsub { color: #ffe9c4; font-size: 20px; font-weight: 700; text-shadow: 0 2px 8px #000; margin-top: 6px; }
+  #vig { position: fixed; inset: 0; pointer-events: none; z-index: 4; box-shadow: inset 0 0 120px rgba(180,20,20,0); transition: box-shadow 0.3s; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<canvas id="game-canvas"></canvas>
+<div id="vig"></div>
+
+<div id="hud" class="hidden">
+  <div id="minimap-wrap"><canvas id="minimap" width="190" height="190"></canvas></div>
+  <div id="packages">Packages 0/10</div>
+  <div id="topright">
+    <div id="wanted"></div>
+    <div id="money">$0</div>
+    <div class="barlabel">HEALTH</div>
+    <div class="bar"><div id="healthfill"></div></div>
+    <div id="carbar" class="hidden">
+      <div class="barlabel">VEHICLE</div>
+      <div class="bar"><div id="carfill"></div></div>
+    </div>
+  </div>
+  <div id="objective" class="hidden"><span id="objtext"></span><span id="objdist"></span></div>
+  <div id="toast" class="hidden"></div>
+  <div id="banner" class="hidden"><div id="bannerName"></div><div id="bannerText"></div></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="bustedwrap" class="hidden"><div id="bustedlabel">BUSTED</div><div id="bustedbar"><div id="bustedfill"></div></div></div>
+  <div id="speedo" class="hidden"><div class="num">0</div><div class="unit">KM/H</div></div>
+  <div id="crosshair" class="hidden"></div>
+</div>
+
+<div id="menu" class="overlay">
+  <div id="title">PALMSHADE<br>CITY</div>
+  <div id="subtitle">Sun, sand and sirens — an open-world crime caper on the coast.</div>
+  <button class="btn" id="btnPlay">▶ &nbsp;PLAY</button>
+  <button class="btn alt hidden" id="btnContinue">CONTINUE</button>
+  <div id="controls">
+    <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> camera &nbsp;·&nbsp; <b>Click</b> shoot (on foot)<br>
+    <b>E</b> enter car / talk &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>P</b> pause
+  </div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <p>Palmshade waits for no one. Well — just this once.</p>
+    <button class="btn small" id="btnResume">RESUME</button><br>
+    <button class="btn small alt" id="btnSave">SAVE GAME</button><br>
+    <button class="btn small alt" id="btnMenu">MAIN MENU</button>
+  </div>
+</div>
+
+<div id="bustedOv" class="overlay hidden">
+  <h1>BUSTED</h1>
+  <div class="ovsub" id="bustedSub">The Palmshade PD got you.</div>
+</div>
+
+<div id="wastedOv" class="overlay hidden">
+  <h1>WASTED</h1>
+  <div class="ovsub">You wake up outside Palmshade General.</div>
+</div>
+
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
