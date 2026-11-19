@@ -17,9 +17,6 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const ENTRY_TITLE = 'Palmshade City';
-console.log(`handing in: ${ENTRY_TITLE}`);
-
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
