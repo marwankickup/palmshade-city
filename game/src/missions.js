@@ -242,6 +242,7 @@ export class Missions {
     const m = this.mission();
     const pay = Math.round(m.reward * this.game.rewardMul);
     this.game.addMoney(pay);
+    if (this.game.earnStanding) { const ep = this.game.entityPos(); this.game.earnStanding(ep.x, ep.z, 8); }
     this.game.state.missionsCompleted++;
     this.game.sfx('jingle');
     const spk = this.speaker();

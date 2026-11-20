@@ -24,6 +24,37 @@
   .chip { font-size: 9px; font-weight: 700; letter-spacing: 0.6px; padding: 1.5px 5px; border-radius: 4px; color: #fff; }
   .chip.pursuit { background: #2456a6; } .chip.ramming { background: #b03024; }
   .chip.roadblock { background: #7a4a12; } .chip.air { background: #5b3ea8; }
+  .chip.pit { background: #8e2f7d; }
+  /* ---------- crew panel ---------- */
+  #crewPanel { padding: 7px 10px; }
+  #crewPanel .rp-head { font-size: 10px; letter-spacing: 2px; color: #9fb6cc; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  #crewPanel .rp-head b { color: #ffb35c; }
+  .crew-row { display: flex; align-items: center; gap: 8px; padding: 2.5px 0; }
+  .crew-tile { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; border: 1px solid rgba(255,255,255,0.35); }
+  .crew-info { flex: 1; }
+  .crew-name { font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; color: #dfe7ee; margin-bottom: 2px; }
+  .crew-bar { height: 7px; }
+  /* ---------- garage menu ---------- */
+  #garageMenu .shop { width: min(480px, 94vw); padding: 16px 18px; text-align: left; }
+  #garageMenu .shop h2 { font-size: 30px; text-align: center; color: #ffb35c; }
+  #garageCashRow { text-align: center; font-size: 15px; margin: 4px 0 12px; color: #e8dcc2; }
+  #garageCash { color: #7ddf7d; font-weight: 800; font-size: 19px; }
+  .upg-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin-bottom: 7px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 9px; }
+  .upg-info { flex: 1; }
+  .upg-name { font-size: 14px; font-weight: 800; letter-spacing: 1.5px; }
+  .upg-name .pips { color: #ffb35c; letter-spacing: 2px; margin-left: 6px; font-size: 12px; }
+  .upg-desc { font-size: 11.5px; color: #b9c4ce; margin-top: 1px; }
+  .upg-price { font-size: 15px; font-weight: 800; color: #7ddf7d; min-width: 52px; text-align: right; }
+  .btn.small { padding: 8px 16px; font-size: 13.5px; margin-top: 0; }
+  .btn.locked, .btn:disabled { opacity: 0.45; cursor: default; filter: grayscale(0.4); }
+  /* ---------- pause: district standing ---------- */
+  .standBox { margin-top: 16px; padding: 12px 16px; width: min(400px, 92vw); text-align: left; }
+  .standTitle { font-size: 10.5px; letter-spacing: 2.5px; color: #ffd23e; font-weight: 800; margin-bottom: 8px; }
+  .standRow { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .standRow span { flex: 0 0 108px; font-size: 11.5px; font-weight: 700; letter-spacing: 1px; color: #dfe7ee; }
+  .standRow .bar { flex: 1; }
+  .standRow .bar > div { background: linear-gradient(90deg, #2a9d8f, #7ddf7d); width: 0%; }
+  #pauseStats { margin-top: 8px; font-size: 12px; color: #b9c4ce; }
   .rp-none { font-size: 11.5px; color: #77828e; }
   #minimap { width: 172px; height: 172px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.28); }
   /* ---------- top-right ---------- */
@@ -104,6 +135,10 @@
         <div class="rp-head"><span>PD RESPONSE</span><b id="rpThreat">CLEAR</b></div>
         <div id="responseList"><div class="rp-none">No units responding</div></div>
       </div>
+      <div id="crewPanel" class="panel hidden">
+        <div class="rp-head"><span>CREW</span><b>G · PICKUP</b></div>
+        <div id="crewList"></div>
+      </div>
       <canvas id="minimap" width="172" height="172"></canvas>
     </div>
     <div id="rightStack">
@@ -149,7 +184,8 @@
     <button id="btnContinue" class="btn ghost hidden">CONTINUE</button>
     <div class="controls">
       <b>W A S D</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> camera &nbsp;·&nbsp; <b>Click</b> shoot (on foot)<br>
-      <b>E</b> talk / enter &amp; exit car or boat &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>1/2/3</b> weapon &nbsp;·&nbsp; <b>P / Esc</b> pause
+      <b>E</b> talk / enter &amp; exit car or boat / recruit crew &nbsp;·&nbsp; <b>Shift</b> sprint / nitro &nbsp;·&nbsp; <b>Space</b> handbrake<br>
+      <b>G</b> crew pickup &nbsp;·&nbsp; <b>E</b> at Palmshade Customs (garage) for upgrades &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>1/2/3</b> weapon &nbsp;·&nbsp; <b>P / Esc</b> pause
     </div>
   </div>
   <!-- PAUSE -->
@@ -158,6 +194,40 @@
     <div class="sub">Palmshade waits for no one — but it will wait for you.</div>
     <button id="btnResume" class="btn">RESUME</button>
     <button id="btnRespawn" class="btn ghost">RESPAWN AT PALMSHADE PD</button>
+    <div class="standBox panel">
+      <div class="standTitle">DISTRICT STANDING</div>
+      <div class="standRow"><span>BRISA BEACH</span><div class="bar"><div id="stand-beach"></div></div></div>
+      <div class="standRow"><span>CENTRO</span><div class="bar"><div id="stand-centro"></div></div></div>
+      <div class="standRow"><span>WESTSIDE</span><div class="bar"><div id="stand-west"></div></div></div>
+      <div id="pauseStats">Carjacks: 0</div>
+    </div>
+  </div>
+  <!-- GARAGE -->
+  <div id="garageMenu" class="overlay hidden">
+    <div class="shop panel">
+      <h2>🔧 PALMSHADE CUSTOMS</h2>
+      <div id="garageCashRow">Cash on hand: <span id="garageCash">$0</span> · upgrades apply to every ride you drive</div>
+      <div class="upg-row">
+        <div class="upg-info"><div class="upg-name">ENGINE<span class="pips" id="lvl-engine">○○○</span></div><div class="upg-desc">+8% top speed &amp; +9% accel per level</div></div>
+        <div class="upg-price" id="price-engine">$300</div>
+        <button class="btn small" data-buy="engine">BUY</button>
+      </div>
+      <div class="upg-row">
+        <div class="upg-info"><div class="upg-name">ARMOR<span class="pips" id="lvl-armor">○○○</span></div><div class="upg-desc">Your ride takes −33% damage per level</div></div>
+        <div class="upg-price" id="price-armor">$250</div>
+        <button class="btn small" data-buy="armor">BUY</button>
+      </div>
+      <div class="upg-row">
+        <div class="upg-info"><div class="upg-name">NITRO<span class="pips" id="lvl-nitro">○○○</span></div><div class="upg-desc">Hold SHIFT to boost · bigger tank per level</div></div>
+        <div class="upg-price" id="price-nitro">$400</div>
+        <button class="btn small" data-buy="nitro">BUY</button>
+      </div>
+      <div class="upg-row">
+        <div class="upg-info"><div class="upg-name">REPAIR</div><div class="upg-desc" id="repairInfo">Bring a car into the bay to repair it.</div></div>
+        <button class="btn small" id="btnRepair">FIX IT</button>
+      </div>
+      <div style="text-align:center"><button id="btnGarageClose" class="btn ghost">← BACK TO THE STREET (ESC)</button></div>
+    </div>
   </div>
   <!-- BUSTED -->
   <div id="bustedScreen" class="overlay hidden">

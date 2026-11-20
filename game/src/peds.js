@@ -74,6 +74,23 @@ export class Peds {
     }
     return false;
   }
+  // Carjacking: the driver of a stolen traffic car is dumped at the kerb and runs.
+  ejectDriver(x, z) {
+    let best = null, bd = -1;
+    for (const ped of this.list) {
+      if (ped.state === 'down' || ped.state === 'gone') continue;
+      const d = dist2d(ped.x, ped.z, x, z);
+      if (d > bd) { bd = d; best = ped; }
+    }
+    if (!best) return null;
+    best.x = x + 2.1; best.z = z + 0.6;
+    best.tx = best.x; best.tz = best.z;
+    best.state = 'flee'; best.fleeT = 2.8;
+    best.heading = Math.atan2(best.x - x, best.z - z);
+    best.fig.position.set(best.x, 0, best.z);
+    best.fig.rotation.set(0, best.heading, 0);
+    return best;
+  }
   hit(ped) {
     if (ped.state === 'down') return;
     ped.state = 'down'; ped.downT = 4;

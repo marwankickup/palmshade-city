@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { buildCity, updateCity, landmarks, packageSpots } from './city.js';
 import { Player } from './player.js';
-import { createCar, cars, spawnParkedCars, flashLights } from './vehicles.js';
+import { createCar, cars, spawnParkedCars, flashLights, setExplosionHandler } from './vehicles.js';
 import { createBoat } from './boats.js';
 import { Traffic } from './traffic.js';
 import { Peds } from './peds.js';
@@ -10,6 +10,8 @@ import { Police } from './police.js';
 import { Missions, MARISOL, DARIO } from './missions.js';
 import { Activities } from './activities.js';
 import { Combat } from './combat.js';
+import { Crew } from './crew.js';
+import { Garage, BAY as GARAGE_BAY } from './garage.js';
 import { Collectibles } from './collectibles.js';
 import { Minimap } from './minimap.js';
 import { loadSave, writeSave } from './save.js';
@@ -53,6 +55,11 @@ const G = {
   currentCar: null, lastCrimeT: -99, crimeCd: {}, fireT: 0, weapon: 2,
   station: 0, rpT: 0, saveT: 0, camYaw: -2.2, camPitch: 0.32, mouseSeen: -99,
   dlgQueue: [], dlgT: 0, notifyT: 0, started: false, shotSpeedo: null, _carDead: false,
+  // v9: garage profile, district standing, stats, camera shake
+  upgrades: { engine: 0, armor: 0, nitro: 0 },
+  standing: { beach: 0, centro: 0, west: 0 },
+  stats: { carjacks: 0 },
+  shake: 0,
   scene, landmarks,
 };
 G.inCar = () => !!G.currentCar;
@@ -78,7 +85,23 @@ G.saveGame = () => {
     money: G.state.money, missionIndex: missions.index,
     packages: [...G.state.packages], pos: { x: player.pos.x, z: player.pos.z },
     finished: G.state.chainFinished,
+    upgrades: G.upgrades, standing: G.standing, stats: G.stats,
+    crew: crew ? crew.recruitedNames() : [],
   });
+};
+// districts: Brisa Beach (east shore), Centro (middle), Westside (warehouse side)
+G.districtAt = x => x >= 120 ? 'beach' : x <= -60 ? 'west' : 'centro';
+G.earnStanding = (x, z, n) => {
+  const d = G.districtAt(x);
+  G.standing[d] = clamp(G.standing[d] + n, 0, 100);
+};
+G.applyUpgrades = car => {
+  if (!car || car.type === 'boat') return;
+  const u = G.upgrades;
+  car.topMul = 1 + 0.08 * u.engine;
+  car.accMul = 1 + 0.09 * u.engine;
+  car.armorMul = 1 / (1 + 0.5 * u.armor);
+  car.nitroLvl = u.nitro;
 };
 
 // ---------- world actors ----------
@@ -95,6 +118,38 @@ const peds = new Peds(scene, 26);
 const police = new Police(scene);
 const combat = new Combat(scene);
 G.combat = combat;
+const crew = new Crew(G, peds, combat, police);
+G.crew = crew;
+const garage = new Garage(G);
+G.garage = garage;
+// explosions: splash damage, chain reactions, crew caught in the blast,
+// and the player is thrown clear of their own burning ride
+setExplosionHandler(car => {
+  const p = car.group.position;
+  G.shake = Math.max(G.shake, 0.7);
+  audio.crash(1);
+  for (const other of cars) {
+    if (other === car || other.exploded) continue;
+    const o = other.group.position;
+    const d = dist2d(o.x, o.z, p.x, p.z);
+    if (d < 8) {
+      other.hurt(58 * (1 - d / 10));
+      other.spin += (Math.random() < 0.5 ? -1 : 1) * 1.4;
+      if (other.driver === 'traffic') other.driver = 'parked'; // driver bails
+    }
+  }
+  for (const ped of peds.list) {
+    if (ped.state !== 'down' && dist2d(ped.group.position.x, ped.group.position.z, p.x, p.z) < 6) peds.hit(ped);
+  }
+  crew.damageNear({ x: p.x, z: p.z }, 6.5, 42);
+  if (car === G.currentCar && G.inCar()) {
+    player.damage(38);
+    audio.hurt();
+    exitCar();
+    G.notify('💥 Your ride blew up!');
+  }
+  if (car.driver === 'traffic') car.driver = 'parked';
+});
 const minimap = new Minimap($('minimap'));
 const activities = new Activities(G, peds);
 G.activities = activities;
@@ -135,8 +190,17 @@ function nearestCar(maxD = 3.6) {
 }
 function enterCar(car) {
   G.currentCar = car;
-  if (car.driver === 'parked') { crime('theft', car.group.position.x, car.group.position.z); }
+  G._carDead = false;
+  if (car.driver === 'traffic') {
+    // CARJACKING: the driver is dumped at the kerb and runs for it
+    peds.ejectDriver(car.group.position.x, car.group.position.z);
+    G.stats.carjacks++;
+    G.notify('🚗 Carjacked!');
+    crime('theft', car.group.position.x, car.group.position.z);
+    G.saveGame();
+  } else if (car.driver === 'parked') { crime('theft', car.group.position.x, car.group.position.z); }
   if (car.driver !== 'mission') car.driver = 'player';
+  G.applyUpgrades(car);
   player.group.visible = false;
   audio.setEngine(true, 0);
   if (missions) missions.onEnterCar(car);
@@ -159,7 +223,15 @@ function exitCar() {
 }
 function doInteract() {
   if (G.state.mode !== 'playing') return;
-  if (G.inCar()) { exitCar(); return; }
+  if (G.inCar()) {
+    // at the Palmshade Customs bay, E opens the upgrade shop instead of exiting
+    if (!G.inBoat() && garage.near(G.currentCar.group.position)) { garage.open(); return; }
+    exitCar(); return;
+  }
+  const downed = crew.nearestDowned(player.pos);
+  if (downed) { crew.revive(downed); return; }
+  const recruit = crew.nearestRecruitable(player.pos);
+  if (recruit) { crew.recruit(recruit); return; }
   if (missions && missions.interact()) return;
   const bp = boat.group.position;
   if (dist2d(bp.x, bp.z, player.pos.x, player.pos.z) < 7.5) { enterCar(boat); return; }
@@ -206,12 +278,17 @@ function startGame(fromSave) {
     G.state.missionsCompleted = save.finished ? 10 : save.missionIndex;
     G.rewardMul = save.finished ? 1.5 : 1;
     G.state.packages = new Set(save.packages);
+    G.upgrades = save.upgrades;
+    G.standing = save.standing;
+    G.stats = save.stats;
+    crew.restore(save.crew);
   }
   if (!missions) missions = new Missions(G);
   if (!collectibles) {
     collectibles = new Collectibles(scene, packageSpots, [...G.state.packages], id => {
       G.state.packages.add(id);
       G.addMoney(100);
+      G.earnStanding(packageSpots[id].x, packageSpots[id].z, 4);
       G.notify(`📦 Package ${G.state.packages.size}/20 — +$100`);
       audio.chime();
       G.saveGame();
@@ -235,6 +312,10 @@ $('btnWastedOk').onclick = () => { $('wastedScreen').classList.add('hidden'); re
 function pauseGame() {
   if (G.state.mode !== 'playing') return;
   G.state.mode = 'paused';
+  $('stand-beach').style.width = G.standing.beach + '%';
+  $('stand-centro').style.width = G.standing.centro + '%';
+  $('stand-west').style.width = G.standing.west + '%';
+  $('pauseStats').textContent = `Carjacks: ${G.stats.carjacks} · Missions done: ${G.state.missionsCompleted} · Packages: ${G.state.packages.size}/20 · Crew: ${crew.recruitedNames().length}/2`;
   $('pauseMenu').classList.remove('hidden');
   G.saveGame();
   if (document.exitPointerLock) document.exitPointerLock();
@@ -249,11 +330,14 @@ addEventListener('keydown', e => {
   audio.unlock();
   if (G.state.mode === 'playing') {
     if (e.code === 'KeyE') doInteract();
+    if (e.code === 'KeyG' && !G.inCar()) crew.callPickup();
     if (e.code === 'KeyP' || e.code === 'Escape') pauseGame();
     if (e.code === 'KeyR' && G.inCar()) cycleStation();
     if (e.code === 'Digit1') setWeapon(1);
     if (e.code === 'Digit2') setWeapon(2);
     if (e.code === 'Digit3') setWeapon(3);
+  } else if (G.state.mode === 'garage' && (e.code === 'Escape' || e.code === 'KeyE')) {
+    garage.close();
   } else if (G.state.mode === 'paused' && (e.code === 'KeyP' || e.code === 'Escape')) {
     $('pauseMenu').classList.add('hidden'); G.state.mode = 'playing';
   }
@@ -309,7 +393,7 @@ function shoot() {
   combat.tryShoot(camera, muzzle, {
     ped: (ped) => { peds.hit(ped, 100); crime('hitPed', ep.x, ep.z); },
     car: (car) => {
-      car.health -= smg ? 8 : 14;
+      car.hurt(smg ? 8 : 14);
       if (car.type === 'police') { G.wanted = clamp(G.wanted + 1, 0, 5); G.lastCrimeT = G.time; police.ensure(G.wanted, ep); }
       else crime('shot', ep.x, ep.z);
     },
@@ -324,7 +408,7 @@ function renderResponsePanel() {
   const el = $('responseList');
   if (!list.length) el.innerHTML = '<div class="rp-none">No units responding</div>';
   else el.innerHTML = list.map(u => {
-    const cls = u.role === 'RAMMING' ? 'ramming' : u.role === 'ROADBLOCK' ? 'roadblock' : u.role === 'AIR UNIT' ? 'air' : 'pursuit';
+    const cls = u.role === 'RAM' ? 'ramming' : u.role === 'PIT' ? 'pit' : u.role === 'ROADBLOCK' ? 'roadblock' : u.role === 'AIR UNIT' ? 'air' : 'pursuit';
     return `<div class="rp-row"><span class="rp-call">${u.callsign}</span><span class="chip ${cls}">${u.role}</span><span class="rp-dist">${Math.round(u.dist)}m</span></div>`;
   }).join('');
   const threat = $('rpThreat');
@@ -353,7 +437,12 @@ function updateHUD(dt) {
   $('radioCard').classList.toggle('muted', !G.inCar());
   let prompt = '';
   if (G.state.mode === 'playing' && !SHOT) {
-    if (G.inCar()) { if (Math.abs(G.currentCar.speed) < 2.5) prompt = G.inBoat() ? '<b>E</b> — Step off at the dock' : '<b>E</b> — Exit vehicle'; }
+    if (G.inCar()) {
+      if (!G.inBoat() && garage.near(G.currentCar.group.position)) prompt = '<b>E</b> — Palmshade Customs · upgrades & repair';
+      else if (Math.abs(G.currentCar.speed) < 2.5) prompt = G.inBoat() ? '<b>E</b> — Step off at the dock' : '<b>E</b> — Exit vehicle';
+    }
+    else if (crew.nearestDowned(player.pos)) prompt = `<b>E</b> — Revive ${crew.nearestDowned(player.pos).name}`;
+    else if (crew.nearestRecruitable(player.pos)) prompt = `<b>E</b> — Recruit ${crew.nearestRecruitable(player.pos).name} to your crew`;
     else if (missions && missions.step() && missions.step().type === 'talk' && missions.talkTarget() &&
       dist2d(player.pos.x, player.pos.z, missions.talkTarget().x, missions.talkTarget().z) < 3.6) {
       prompt = missions.step().who === 'dario' ? '<b>E</b> — Talk to Captain Dario' : '<b>E</b> — Talk to Marisol';
@@ -383,7 +472,7 @@ function updateHUD(dt) {
   }
   if (G.notifyT > 0) { G.notifyT -= dt; if (G.notifyT <= 0) $('notify').classList.add('hidden'); }
   G.rpT -= dt;
-  if (G.rpT <= 0) { G.rpT = 0.25; renderResponsePanel(); }
+  if (G.rpT <= 0) { G.rpT = 0.25; renderResponsePanel(); crew.renderPanel(); }
 }
 
 // ---------- per-frame updates ----------
@@ -393,6 +482,7 @@ function updatePlaying(dt) {
     const car = G.currentCar;
     const throttle = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) + (keys.has('KeyS') || keys.has('ArrowDown') ? -1 : 0);
     const steer = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) + (keys.has('KeyA') || keys.has('ArrowLeft') ? -1 : 0);
+    car.boosting = (keys.has('ShiftLeft') || keys.has('ShiftRight')) && G.upgrades.nitro > 0;
     car.update(dt, throttle, steer);
     if (keys.has('Space')) car.speed -= car.speed * 2.6 * dt;
     player.group.position.copy(car.group.position);
@@ -426,9 +516,20 @@ function updatePlaying(dt) {
   police.update(dt, {
     playerPos: G.entityPos(), playerHeading: G.inCar() ? G.currentCar.heading : player.heading,
     playerSpeed: G.entitySpeed(), inCar: G.inCar(), wanted: G.wanted,
+    playerCar: G.currentCar,
+    onSpike: () => {
+      if (G.currentCar) {
+        G.currentCar.tiresFlat = 6;
+        G.notify('🛞 Spike strip — tires shredded!');
+        audio.crash(0.5);
+      }
+    },
     onShoot: () => {
+      // a crew member on foot nearby sometimes catches the round instead
+      const m = crew.nearestOnFoot(G.entityPos(), 6);
+      if (m && Math.random() < 0.3) { crew.damage(m, 6); return; }
       if (G.inCar()) {
-        G.currentCar.health -= 5;
+        G.currentCar.hurt(5);
         if (G.currentCar.health <= 0 && !G._carDead) { G._carDead = true; G.notify('Your ride is wrecked!'); }
       } else { player.damage(4.5); audio.hurt(); }
     },
@@ -437,6 +538,8 @@ function updatePlaying(dt) {
   audio.setSiren(G.wanted > 0 && police.nearestDist(G.entityPos()) < 55);
   if (missions) missions.update(dt, G.time);
   activities.update(dt, G.time);
+  crew.update(dt);
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 1.5);
   if (G.currentCar !== boat) boat.update(dt, 0, 0);
   if (collectibles) collectibles.update(dt, ep.x, G.inCar() ? 0 : player.y, ep.z, G.time);
   combat.update(dt, {
@@ -458,7 +561,7 @@ function updatePlaying(dt) {
         const o = other.group.position;
         if (dist2d(cp.x, cp.z, o.x, o.z) < (car.radius + other.radius) * 0.72) {
           other.hitCooldown = 1.6; car.hitCooldown = 1.6;
-          other.health -= 9; car.health -= 6;
+          other.hurt(9); car.hurt(6);
           other.speed = car.speed * 0.35; car.speed *= 0.35;
           audio.crash(0.8);
           crime('hitCar', cp.x, cp.z);
@@ -500,6 +603,10 @@ function updateCamera() {
   const fz = Math.cos(G.camYaw) * Math.cos(G.camPitch);
   const ty = ep.y + (G.inCar() ? 2.1 : 1.7);
   camera.position.set(ep.x - fx * dist, Math.max(0.7, ty - fy * dist + 1.2), ep.z - fz * dist);
+  if (G.shake > 0) {
+    camera.position.x += (Math.random() - 0.5) * G.shake * 0.9;
+    camera.position.y += (Math.random() - 0.5) * G.shake * 0.6;
+  }
   camera.lookAt(ep.x + fx * 6, ty + 0.4, ep.z + fz * 6);
 }
 
@@ -508,6 +615,10 @@ function stageShot(name) {
   startGame(false);
   traffic.enabled = false;
   audio.setMuted(true);
+  // a lived-in profile for the HUD: cash, tuning, standing
+  G.state.money = 2450;
+  G.upgrades = { engine: 2, armor: 1, nitro: 1 };
+  G.standing = { beach: 64, centro: 38, west: 21 };
   // ---- shot-only lighting: bright golden-hour grade, no black silhouettes ----
   renderer.toneMappingExposure = 1.34;
   scene.traverse(o => {
@@ -537,7 +648,10 @@ function stageShot(name) {
     placePed(0, 190.5, -27, -Math.PI / 2);
     placePed(1, 190.5, -11, Math.PI / 2);
     placePed(2, 170.5, -36, 0.4);
+    crew.stageAt(hero); // Vex & Tito flanking the hero car
     G.wanted = 3; G.shotSpeedo = 66;
+    const pu1 = police.spawnUnit({ x: 180, z: -18 }); pu1.callsign = 'PIT-1'; pu1.pit = true; pu1.role = 'PIT';
+    const pu2 = police.spawnUnit({ x: 180, z: -18 }); pu2.role = 'PURSUIT';
     police.setHeliForced(true, { x: 180, z: -18 });
     if (police.heli) { police.heli.group.position.set(190, 17, -34); police.heli.group.lookAt(180, 0, -18); }
     G.shotCam = { pos: new THREE.Vector3(177.4, 2.5, -12.6), look: new THREE.Vector3(180.2, 1.0, -18.4) };
@@ -560,6 +674,15 @@ function stageShot(name) {
     placePed(1, 164.5, -27.5, -2.2);
     placePed(2, 190, -44, -Math.PI / 2);
     G.shotCam = { pos: new THREE.Vector3(177.5, 2.5, -51.5), look: new THREE.Vector3(168, 1.2, -42) };
+  } else if (name === 'garage') {
+    // Inside Palmshade Customs: hero car on the bay, upgrade menu open, cash up.
+    const hero = heroAt(createCar(scene, 'sport', GARAGE_BAY.x, GARAGE_BAY.z, -Math.PI / 2, 0xd23b2e), GARAGE_BAY.x, GARAGE_BAY.z, -Math.PI / 2);
+    hero.driver = 'player'; G.currentCar = hero; player.group.visible = false;
+    G.applyUpgrades(hero);
+    extraCar('sedan', 82, 84, Math.PI / 2, 0x2ea6a0);
+    extraCar('pickup', 98, 96, -Math.PI / 2, 0x7a4fd0);
+    garage.open();
+    G.shotCam = { pos: new THREE.Vector3(99.5, 2.6, 99), look: new THREE.Vector3(88, 1.1, 85) };
   } else if (name === 'boat') {
     // The Brisa at speed off the marina, city skyline behind her.
     boat.group.position.set(301, -0.12, 39);
@@ -595,10 +718,20 @@ function stageShot(name) {
     // the roadblock: two interceptors parked sideways across the road ahead
     heroAt(createCar(scene, 'police', 176.6, 14.5, Math.PI / 2 + 0.14), 176.6, 14.5, Math.PI / 2 + 0.14).driver = 'parked';
     heroAt(createCar(scene, 'police', 183.8, 14.0, Math.PI / 2 - 0.12), 183.8, 14.0, Math.PI / 2 - 0.12).driver = 'parked';
+    // a PIT unit cocked into the hero's rear quarter, mid-maneuver
+    heroAt(createCar(scene, 'police', 184.9, 30.8, Math.PI + 0.8), 184.9, 30.8, Math.PI + 0.8).driver = 'parked';
+    // a traffic sedan already burning at the roadside — flames up, about to blow
+    const burn = heroAt(createCar(scene, 'sedan', 172.6, 26.5, 0.9, 0x94503c), 172.6, 26.5, 0.9);
+    burn.driver = 'parked'; burn.health = 0;
+    for (let i = 0; i < 16; i++) burn.update(0.07, 0, 0); // get the fire well alight (burnT ≈ 1.1s)
+    for (const sp of burn.fire) sp.scale.multiplyScalar(1.8); // fat flames for the camera
     extraCar('convertible', 186.5, 4, 0, 0xf2b035);
     placePed(0, 190.5, 30, -Math.PI / 2);
     placePed(1, 170.5, 44, Math.PI);
     G.wanted = 5; G.bustedMeter = 0.45; G.shotSpeedo = 41;
+    const cu1 = police.spawnUnit({ x: 180, z: 36 }); cu1.callsign = 'PIT-1'; cu1.pit = true; cu1.role = 'PIT';
+    const cu2 = police.spawnUnit({ x: 180, z: 36 }); cu2.callsign = 'PIT-2'; cu2.pit = true; cu2.role = 'PIT';
+    const cu3 = police.spawnUnit({ x: 180, z: 36 }); cu3.role = 'RAM';
     police.setHeliForced(true, { x: 180, z: 36 });
     if (police.heli) { police.heli.group.position.set(172, 17, 22); police.heli.group.lookAt(180, 0, 36); }
     // dusk grade: dimmer sky light, low sun for long shadows, headlights pop
@@ -671,6 +804,19 @@ window.__game = {
     taxi: activities.taxi.phase,
     taxiPed: activities.taxi.ped ? { x: Math.round(activities.taxi.ped.x), z: Math.round(activities.taxi.ped.z) } : null,
     weapon: G.weapon,
+    upgrades: { ...G.upgrades },
+    standing: { ...G.standing },
+    district: G.districtAt(G.entityPos().x),
+    carjacks: G.stats.carjacks,
+    crew: crew.debug(),
+    garageOpen: garage.openFlag,
+    tiresFlat: G.currentCar ? Math.round(G.currentCar.tiresFlat * 10) / 10 : 0,
+    carHealth: G.currentCar ? Math.round(G.currentCar.health) : -1,
+    carSpin: G.currentCar ? Math.round(G.currentCar.spin * 100) / 100 : 0,
+    explodedCars: cars.filter(c => c.exploded).length,
+    burningCars: cars.filter(c => c.health <= 0 && !c.exploded).length,
+    nitroFuel: G.currentCar ? Math.round(G.currentCar.nitroFuel * 100) / 100 : -1,
+    policeRoles: police.panelList(G.entityPos()),
     policeCount: police.units.length,
     nearestPolice: (() => { const d = police.nearestDist(G.entityPos()); return d === Infinity ? -1 : Math.round(d); })(),
     pos: G.entityPos(), playerY: player.y,
@@ -690,5 +836,17 @@ window.__game = {
   setMission: i => { if (missions) { missions.index = i; missions.stepIdx = 0; missions._enterStep(); } },
   advanceStep: () => { if (missions) missions._advance(); },
   startRace: () => activities._startRace(),
-  version: 'palmshade-city-2',
+  recruitAll: () => crew.recruitAll(),
+  callPickup: () => crew.callPickup(),
+  crewDamage: (id, n) => { const m = crew.member(id); if (m) crew.damage(m, n); },
+  openGarage: () => garage.open(),
+  closeGarage: () => garage.close(),
+  buyUpgrade: id => garage.buy(id),
+  setTraffic: b => { traffic.enabled = !!b; },
+  trafficPos: () => traffic.units.length ? { x: traffic.units[0].car.group.position.x, z: traffic.units[0].car.group.position.z } : null,
+  burnNearestCar: () => { const c = nearestCar(9); if (c) { c.health = 0; } return !!c; },
+  damageNearestCar: n => { const c = nearestCar(9); if (c) { c.health = n; } return !!c; },
+  spikeHere: () => police.debugSpikeAt(G.entityPos()),
+  setCarHealth: n => { if (G.currentCar) G.currentCar.health = n; },
+  version: 'palmshade-city-3',
 };

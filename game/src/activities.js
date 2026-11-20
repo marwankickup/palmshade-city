@@ -106,6 +106,7 @@ export class Activities {
       if (!this.race.best || t < this.race.best) { this._saveBest(t); msg += ' New best time!'; }
       const pay = 150;
       this.game.addMoney(pay);
+      if (this.game.earnStanding) this.game.earnStanding(RACE_START.x, RACE_START.z, 3);
       this.game.notify(`${msg} +$${pay}`);
       this.game.sfx('jingle');
     }
@@ -193,6 +194,7 @@ export class Activities {
       else if (Math.hypot(ep.x - tx.dest.x, ep.z - tx.dest.z) < 9.5 && speed < 3) {
         const pay = 40 + Math.round(tx.dist / 3);
         G.addMoney(pay);
+        if (G.earnStanding) G.earnStanding(tx.dest.x, tx.dest.z, 3);
         G.notify(`🚕 Fare paid — +$${pay}. Thanks for riding Palmshade Cabs!`);
         G.sfx('jingle');
         const ped = tx.ped;

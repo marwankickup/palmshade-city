@@ -25,6 +25,26 @@ their turf war with the Breakwater Boys.
   live in the **Police Response Panel**, roadblocks and the **AIR-1 helicopter**
   with a searchlight at high wanted levels, and a BUSTED meter when they box
   you in.
+- **Crew system**: recruit **Vex** at the café and **Tito** at the marina —
+  they follow on foot, ride in your car, and shoot at police and Breakwater
+  Boys, with portrait tiles and health bars in the HUD. Downed crew can be
+  revived, and **G** calls the crew car for a pickup.
+- **Garage & cash economy**: missions, races and taxi fares pay cash; spend it
+  at **Palmshade Customs** (the parking-garage workshop) on engine, armor and
+  nitro upgrades — three levels each, applied to every ride you drive, plus
+  repairs. Upgrades persist in your save.
+- **Carjacking**: steal a moving traffic car and its driver is dumped at the
+  kerb and runs — counted as a stat, with a wanted bump.
+- **Exploding cars**: damaged vehicles smoke, catch fire, and blow up —
+  splash damage can chain one wreck into the next, and burning wrecks
+  smoulder on the street.
+- **Police tactics**: at 3+ stars, **PIT-1 / PIT-2** units run at your rear
+  quarter to spin you out; at 4+ stars roadblocks gain **spike strips** that
+  shred your tires; the response panel labels every unit's role (PIT, RAM,
+  ROADBLOCK, AIR-1).
+- **District standing**: Brisa Beach, Centro and Westside each track your
+  standing — missions, packages, races and fares completed there raise it;
+  check your standing on the pause screen.
 - Drive anything: cars on the grid and the runabout **Brisa** at the marina —
   boat handling, wake and open-water runs included.
 - Side activities: a checkpoint **street race** with a saved best time, and
@@ -45,12 +65,13 @@ with WebAudio — there are no audio files and no network calls.
 | W A S D / arrows | Move / drive |
 | Mouse (click canvas to lock) | Orbit camera / aim |
 | Mouse hold (on foot) | Fire sidearm |
-| Shift | Sprint |
-| E | Talk / enter & exit vehicle or boat |
+| Shift | Sprint / nitro boost (in a car, with nitro fitted) |
+| E | Talk / enter & exit vehicle or boat / recruit & revive crew / open Palmshade Customs in a car at the garage bay |
+| G | Call the crew car for a pickup |
 | Space | Brake |
 | R (in a car) | Change radio station |
 | 1 / 2 / 3 | Fists / sidearm / SMG |
-| P / Esc | Pause |
+| P / Esc | Pause (shows district standing) |
 
 ## Run it
 
@@ -64,9 +85,12 @@ pointed at `game/` works too.)
 ## Tech notes
 
 - three.js r180 (vendored), ES modules under `game/src/`, one job per file:
-  city generation, player, vehicles, boat, traffic AI, pedestrians, police AI
-  with BFS road routing, missions, side activities (races & taxi), combat,
-  collectibles, synthesized audio, minimap, save.
+  city generation, player, vehicles (damage, fire & explosions), boat,
+  traffic AI, pedestrians, police AI with BFS road routing (PIT maneuvers,
+  spike strips, roadblocks, helicopter), missions, side activities (races
+  & taxi), combat, crew AI, the garage/upgrades shop, collectibles,
+  synthesized audio, minimap, save.
 - `main.ts` (Node 22) packages `game/` + `screenshots/` and writes the
   `dossier.json` summary for the bounty.
-- Progress (money, missions, packages, position) persists in `localStorage`.
+- Progress (money, missions, packages, position, garage upgrades, district
+  standing, carjack stats and recruited crew) persists in `localStorage`.

@@ -12,6 +12,8 @@ export class Police {
     this.units = [];       // {car, callsign, role, path, wi, repathT, mode, stuckT, lastX, lastZ, shootT, blockT}
     this.seq = 0;
     this.blockTimer = 14;
+    this.spikes = [];      // {mesh, x, z, life, used}
+    this._pitFor = -1;     // wanted level the PIT designations were last set for
     this.heli = null; this.heliAngle = 0; this.heliForced = false; this.heliActive = false;
     this.time = 0;
   }
@@ -44,7 +46,9 @@ export class Police {
       car, callsign: this._callsign(), role: 'PURSUIT', mode,
       path: null, wi: 0, repathT: Math.random(), stuckT: 0,
       lastX: s.x, lastZ: s.z, shootT: 1 + Math.random(), blockT: 0,
+      pit: false, pitSide: 1, pitCd: 0, baseCallsign: null,
     };
+    u.baseCallsign = u.callsign;
     this.units.push(u);
     return u;
   }
@@ -60,7 +64,28 @@ export class Police {
       u.car.group.rotation.y = u.car.heading;
       u.car.speed = 0; u.role = 'ROADBLOCK'; u.blockT = 30;
     }
+    // spike strip across the lane between the two blockers
+    this._placeSpike(ahead.x, ahead.z, playerHeading);
   }
+  _placeSpike(x, z, heading) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x23262b, roughness: 0.5, metalness: 0.6 });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(7.4, 0.07, 0.55), mat);
+    bar.position.y = 0.05; g.add(bar);
+    const toothM = new THREE.MeshStandardMaterial({ color: 0xd8dde2, roughness: 0.25, metalness: 0.9 });
+    for (let i = -3; i <= 3; i++) {
+      const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 5), toothM);
+      tooth.position.set(i * 1.0, 0.16, 0); g.add(tooth);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.075, 0.57),
+        new THREE.MeshStandardMaterial({ color: 0xffd23e, roughness: 0.6 }));
+      stripe.position.set(i * 1.0 + 0.5, 0.05, 0); g.add(stripe);
+    }
+    g.position.set(x, 0, z);
+    g.rotation.y = heading;
+    this.scene.add(g);
+    this.spikes.push({ mesh: g, x, z, life: 30, used: false });
+  }
+  debugSpikeAt(pos) { this._placeSpike(pos.x, pos.z, 0); }
   ensure(wanted, playerPos) {
     const want = wanted <= 0 ? 0 : Math.min(2 + wanted, 6);
     const pursuit = this.units.filter(u => u.mode === 'pursuit');
@@ -70,10 +95,27 @@ export class Police {
       removeCar(this.scene, u.car);
       this.units.splice(this.units.indexOf(u), 1);
     }
+    // PIT designations: at wanted ≥3 the first two pursuit units become PIT-1/PIT-2
+    if (this._pitFor !== wanted) {
+      this._pitFor = wanted;
+      const ps = this.units.filter(u => u.mode === 'pursuit');
+      ps.forEach((u, i) => {
+        if (wanted >= 3 && i < 2) {
+          u.pit = true; u.pitSide = i === 0 ? 1 : -1;
+          u.callsign = 'PIT-' + (i + 1);
+        } else {
+          u.pit = false;
+          u.callsign = u.baseCallsign || u.callsign;
+        }
+      });
+    }
   }
   clearAll() {
     for (const u of this.units) removeCar(this.scene, u.car);
     this.units = [];
+    for (const s of this.spikes) this.scene.remove(s.mesh);
+    this.spikes = [];
+    this._pitFor = -1;
     this.heliActive = false;
     if (this.heli) this.heli.group.visible = false;
   }
@@ -164,7 +206,18 @@ export class Police {
   }
   update(dt, ctx) {
     this.time += dt;
-    const { playerPos, playerHeading, playerSpeed, inCar, wanted, onShoot } = ctx;
+    const { playerPos, playerHeading, playerSpeed, inCar, wanted, onShoot, playerCar, onSpike } = ctx;
+    // spike strips: crossing one in a car shreds the player's tires for a while
+    for (let i = this.spikes.length - 1; i >= 0; i--) {
+      const s = this.spikes[i];
+      s.life -= dt;
+      if (!s.used && inCar && playerCar && dist2d(s.x, s.z, playerPos.x, playerPos.z) < 3.6) {
+        s.used = true;
+        s.mesh.visible = false;
+        if (onSpike) onSpike();
+      }
+      if (s.life <= 0) { this.scene.remove(s.mesh); this.spikes.splice(i, 1); }
+    }
     // roadblocks
     if (wanted >= 4 && inCar && playerSpeed > 9) {
       this.blockTimer -= dt;
@@ -174,6 +227,7 @@ export class Police {
     for (let i = this.units.length - 1; i >= 0; i--) {
       const u = this.units[i], car = u.car, p = car.group.position;
       if (car.driver === 'player') { this.units.splice(i, 1); continue; } // player stole this unit
+      if (car.exploded) { removeCar(this.scene, car); this.units.splice(i, 1); continue; } // burned out
       flashLights(car, this.time + i);
       if (u.mode === 'block') {
         u.role = 'ROADBLOCK';
@@ -186,12 +240,14 @@ export class Police {
       }
       const d = dist2d(p.x, p.z, playerPos.x, playerPos.z);
       // role for the response panel
-      u.role = (d < 13 && car.speed > Math.abs(playerSpeed) + 2) ? 'RAMMING' : 'PURSUIT';
+      u.role = u.pit ? 'PIT' : (d < 13 && car.speed > Math.abs(playerSpeed) + 2) ? 'RAM' : 'PURSUIT';
+      if (u.pitCd > 0) u.pitCd -= dt;
       // stuck detection → respawn near the player (a unit holding its surround
       // slot next to the player is doing its job, not stuck)
       if (d > 11 && Math.hypot(p.x - u.lastX, p.z - u.lastZ) < 0.4 && car.speed < 1.2) u.stuckT += dt; else u.stuckT = 0;
       u.lastX = p.x; u.lastZ = p.z;
       if (u.stuckT > 3.5) {
+        if (car.health <= 0) { removeCar(this.scene, car); this.units.splice(i, 1); continue; } // wrecked: dispatch sends a fresh unit
         const s = this._spawnPos(playerPos);
         p.set(s.x, 0, s.z); car.speed = 0; u.path = null; u.stuckT = 0;
       }
@@ -211,6 +267,20 @@ export class Police {
         const fx = Math.sin(car.heading), fz = Math.cos(car.heading);
         const reached = driveToward(car, wp.x + fz * 2.5, wp.z - fx * 2.5, dt, 1);
         if (reached < 5) u.wi++;
+      } else if (u.pit && wanted >= 3 && inCar && playerCar) {
+        // PIT maneuver: run at the player's rear quarter and knock them into a spin
+        const fx = Math.sin(playerHeading), fz = Math.cos(playerHeading);
+        const rx = fz, rz = -fx;
+        const tx = playerPos.x - fx * 3.4 + rx * u.pitSide * 1.7;
+        const tz = playerPos.z - fz * 3.4 + rz * u.pitSide * 1.7;
+        driveToward(car, tx, tz, dt, 1.0);
+        if (d < 3.6 && u.pitCd <= 0 && Math.abs(playerSpeed) > 4) {
+          playerCar.spin = u.pitSide * 2.3;
+          playerCar.speed *= 0.84;
+          playerCar.hurt(3);
+          u.pitCd = 2.6;
+          u.pitSide *= -1; // swap quarters for the next run
+        }
       } else {
         // chase mode: surround slots around the player
         const idx = pursuitIdx.n++;
