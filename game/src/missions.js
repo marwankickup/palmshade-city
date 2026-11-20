@@ -1,9 +1,14 @@
-// missions.js — the Marisol Vega story chain: 7 missions vs the Breakwater Boys.
+// missions.js — the Palmshade story chain: 10 missions for Marisol Vega
+// (and harbour captain Dario) against the Breakwater Boys.
 import * as THREE from 'three';
 import { createFigure } from './player.js';
 import { makePackage } from './collectibles.js';
+import { createCar, removeCar } from './vehicles.js';
+import { driveToward } from './traffic.js';
+import { roadPath } from './util.js';
 
 export const MARISOL = { name: 'MARISOL VEGA', role: 'CAFÉ OWNER', initial: 'M', color: '#2a9d8f' };
+export const DARIO = { name: 'CAPTAIN DARIO', role: 'MARINA · “BRISA”', initial: 'D', color: '#b5651d' };
 export const DREY = { name: 'DREY', role: 'BREAKWATER BOYS', initial: 'D', color: '#54687f' };
 export const DISPATCH = { name: 'PALMSHADE PD', role: 'DISPATCH', initial: 'PD', color: '#3f6fb5' };
 
@@ -86,6 +91,47 @@ const MISSIONS = [
       { type: 'goTo', pos: CAFE, r: 11, text: 'Return to Marisol — end of the line' },
     ],
   },
+  {
+    title: 'Harbour Run', reward: 800, speaker: DARIO,
+    intro: ['Dario: "Marisol sends her best runner, eh? Then you can handle my Brisa."',
+      'Dario: "A buyer waits past the south buoy — no roads, no witnesses. Take the boat at the dock, run it out, and bring her home."'],
+    outro: ['Dario: "Fast hands, soft wake. The harbour respects that."'],
+    steps: [
+      { type: 'talk', who: 'dario', text: 'Talk to Captain Dario at the marina dock' },
+      { type: 'enterBoat', text: 'Board the runabout “Brisa” at the dock' },
+      { type: 'sailTo', pos: { x: 336, z: -128 }, r: 15, text: 'Run the delivery out past the south buoy' },
+      { type: 'sailTo', pos: { x: 276, z: 16 }, r: 15, text: 'Bring the Brisa back to the marina' },
+    ],
+  },
+  {
+    title: 'Boulevard GP', reward: 900,
+    intro: ['Marisol: "Drey\'s wheelman brags he owns the boulevard. Seven corners, one clock, my colours on your car."',
+      'Marisol: "Beat him through every checkpoint and the beach hears a new name by sundown."'],
+    outro: ['Marisol: "The boulevard is yours. Drey is buying drinks for strangers tonight, out of shame."'],
+    steps: [
+      { type: 'talk', text: 'Talk to Marisol' },
+      {
+        type: 'race', time: 170, start: { x: 180, z: 120 },
+        checkpoints: [
+          { x: 180, z: 60 }, { x: 180, z: -60 }, { x: 60, z: -120 }, { x: -60, z: -60 },
+          { x: -60, z: 60 }, { x: 60, z: 120 }, { x: 180, z: 120 },
+        ],
+        text: 'Beat Drey\'s wheelman through the checkpoints!',
+      },
+    ],
+  },
+  {
+    title: 'Rooftop Finale', reward: 1500,
+    intro: ['Marisol: "One last thing. The Boys stashed their ledger on the Warehouse 7 roof — proof of everything."',
+      'Marisol: "Climb the crates, take it, and expect company. Then bring it home and we burn it together."'],
+    outro: ['Marisol: "The ledger, the beach, the city. All ours now, runner. All ours."'],
+    steps: [
+      { type: 'talk', text: 'Talk to Marisol' },
+      { type: 'goTo', pos: { x: -160, z: 146 }, r: 5, minY: 6, text: 'Climb the crates to the Warehouse 7 roof stash' },
+      { type: 'shootout', count: 4, pos: { x: -150, z: 118 }, text: 'The Boys want their ledger back!' },
+      { type: 'goTo', pos: CAFE, r: 11, text: 'Bring the ledger back to Marisol' },
+    ],
+  },
 ];
 export const MISSION_COUNT = MISSIONS.length;
 
@@ -106,6 +152,17 @@ export class Missions {
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(game.landmarks.marisol.x, 1.06, game.landmarks.marisol.z);
     game.scene.add(ring);
+    // Captain Dario, waiting on the marina dock
+    const dfig = createFigure({ shirt: 0xf2e3c2, pants: 0x2e3d52, skin: 0x8a5a30, hat: 0xb5651d });
+    this.dario = dfig;
+    dfig.group.position.set(game.landmarks.dario.x, 0.9, game.landmarks.dario.z);
+    dfig.group.rotation.y = Math.PI / 2;
+    game.scene.add(dfig.group);
+    const dring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.45, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffd23e, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+    dring.rotation.x = -Math.PI / 2;
+    dring.position.set(game.landmarks.dario.x, 0.96, game.landmarks.dario.z);
+    game.scene.add(dring);
     // gold objective pillar
     this.marker = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 34, 12, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xffd23e, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
@@ -119,10 +176,36 @@ export class Missions {
   }
   mission() { return MISSIONS[this.index]; }
   step() { return this.mission().steps[this.stepIdx]; }
+  speaker() { return this.mission().speaker || MARISOL; }
+  talkTarget() {
+    const st = this.step();
+    if (!st || st.type !== 'talk') return null;
+    return st.who === 'dario' ? this.game.landmarks.dario : this.game.landmarks.marisol;
+  }
+  _cleanupStep() {
+    if (this.stepState && this.stepState.rival) {
+      removeCar(this.game.scene, this.stepState.rival);
+      this.stepState.rival = null;
+    }
+  }
   _enterStep() {
+    this._cleanupStep();
     const st = this.step();
     this.stepState = {};
     if (!st) return;
+    if (st.type === 'race') {
+      // Drey's wheelman: a black sport coupe that runs the same checkpoints.
+      const rival = createCar(this.game.scene, 'sport', st.start.x + 4, st.start.z, Math.PI, 0x22262c);
+      rival.driver = 'traffic';
+      const route = [];
+      const pts = [st.start, ...st.checkpoints];
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const seg = roadPath(pts[i], pts[i + 1]);
+        route.push(...(i === 0 ? seg : seg.slice(1)));
+      }
+      this.stepState = { cp: 0, t: st.time, rival, route, rwi: 0, rivalCp: 0, started: false };
+      this.game.dialogue(DREY, ['Drey: "My wheelman does not lose, runner. Try to keep up."']);
+    }
     if (st.type === 'collect') {
       this.stepState.items = st.spots.map(s => {
         const mesh = makePackage(0x3ec6ff);
@@ -150,6 +233,7 @@ export class Missions {
     }
   }
   _advance() {
+    this._cleanupStep();
     this.stepIdx++;
     if (this.stepIdx >= this.mission().steps.length) this._completeMission();
     else this._enterStep();
@@ -160,7 +244,9 @@ export class Missions {
     this.game.addMoney(pay);
     this.game.state.missionsCompleted++;
     this.game.sfx('jingle');
-    this.game.dialogue(MARISOL, [...m.outro, `Marisol: "Paid in full — $${pay}."`]);
+    const spk = this.speaker();
+    const payLine = spk === DARIO ? `Dario: "Paid in full — $${pay}."` : `Marisol: "Paid in full — $${pay}."`;
+    this.game.dialogue(spk, [...m.outro, payLine]);
     this.index++;
     if (this.index >= MISSIONS.length) {
       this.index = 0;
@@ -177,9 +263,10 @@ export class Missions {
     const st = this.step();
     if (!st || st.type !== 'talk') return false;
     const p = this.game.player.pos;
-    const m = this.game.landmarks.marisol;
-    if (Math.hypot(p.x - m.x, p.z - m.z) < 3.6 && Math.abs(this.game.player.y - 1.0) < 1.6) {
-      this.game.dialogue(MARISOL, this.mission().intro);
+    const m = this.talkTarget();
+    const baseY = st.who === 'dario' ? 0.9 : 1.0;
+    if (Math.hypot(p.x - m.x, p.z - m.z) < 3.6 && Math.abs(this.game.player.y - baseY) < 1.6) {
+      this.game.dialogue(this.speaker(), this.mission().intro);
       this.game.sfx('talk');
       this._advance();
       return true;
@@ -188,8 +275,13 @@ export class Missions {
   }
   onEnterCar(car) {
     const st = this.step();
-    if (st && st.type === 'enterVan' && car === this.game.vanCar) {
+    if (!st) return;
+    if (st.type === 'enterVan' && car === this.game.vanCar) {
       this.game.dialogue(MARISOL, ['Marisol: "Gently with her. She is older than both of us."']);
+      this._advance();
+    }
+    if (st.type === 'enterBoat' && car.type === 'boat') {
+      this.game.dialogue(DARIO, ['Dario: "Easy on the throttle past the pier. She is older than both of us."']);
       this._advance();
     }
   }
@@ -197,9 +289,11 @@ export class Missions {
     const st = this.step();
     if (!st) return null;
     switch (st.type) {
-      case 'talk': return this.game.landmarks.marisol;
+      case 'talk': return this.talkTarget();
       case 'enterVan': { const p = this.game.vanCar.group.position; return { x: p.x, z: p.z }; }
-      case 'driveTo': case 'goTo': return st.pos;
+      case 'enterBoat': { const b = this.game.boat; return b ? { x: b.group.position.x, z: b.group.position.z } : null; }
+      case 'race': return st.checkpoints[Math.min(this.stepState.cp || 0, st.checkpoints.length - 1)];
+      case 'driveTo': case 'goTo': case 'sailTo': return st.pos;
       case 'collect': {
         const it = (this.stepState.items || []).find(i => !i.taken);
         return it ? it.spot : null;
@@ -222,6 +316,10 @@ export class Missions {
       base += `  (${alive} left)`;
     }
     if (st.type === 'escape') base += `  (heat: ${this.game.wanted}★)`;
+    if (st.type === 'race' && this.stepState.t !== undefined) {
+      base += `  · CP ${(this.stepState.cp || 0) + 1}/${st.checkpoints.length} · ⏱ ${Math.max(0, Math.ceil(this.stepState.t))}s`;
+      if (this.stepState.rivalCp !== undefined) base += ` · rival CP ${Math.min(this.stepState.rivalCp + 1, st.checkpoints.length)}/${st.checkpoints.length}`;
+    }
     return base;
   }
   update(dt, t) {
@@ -253,7 +351,44 @@ export class Missions {
         if (this.game.inCar() && near(st.pos, 10)) this._advance();
         break;
       }
-      case 'goTo': if (near(st.pos, st.r || 6)) this._advance(); break;
+      case 'goTo': if (near(st.pos, st.r || 6) && (!st.minY || ep.y >= st.minY)) this._advance(); break;
+      case 'sailTo': if (this.game.inBoat() && near(st.pos, st.r || 13)) this._advance(); break;
+      case 'race': {
+        const ss = this.stepState;
+        if (!ss.rival) break;
+        // rival runs the route
+        const rp = ss.rival.group.position;
+        if (ss.rwi < ss.route.length) {
+          const wp = ss.route[ss.rwi];
+          const fx = Math.sin(ss.rival.heading), fz = Math.cos(ss.rival.heading);
+          const d = driveToward(ss.rival, wp.x + fz * 3.0, wp.z - fx * 3.0, dt, 0.94);
+          if (d < 5) ss.rwi++;
+        } else ss.rival.update(dt, 0, 0);
+        // rival checkpoint progress (checkpoints sit on intersections along the route)
+        const rcp = st.checkpoints[ss.rivalCp];
+        if (rcp && Math.hypot(rp.x - rcp.x, rp.z - rcp.z) < 14) ss.rivalCp++;
+        // the clock starts as soon as the player is behind a wheel
+        if (!ss.started && this.game.inCar() && !this.game.inBoat()) ss.started = true;
+        if (ss.started) {
+          ss.t -= dt;
+          const cp = st.checkpoints[ss.cp];
+          if (cp && this.game.inCar() && !this.game.inBoat() && near(cp, 13)) {
+            ss.cp++;
+            this.game.sfx('chime');
+            if (ss.cp >= st.checkpoints.length) { this._advance(); break; }
+            this.game.notify(`Checkpoint ${ss.cp}/${st.checkpoints.length}`);
+          }
+          if (ss.rivalCp >= st.checkpoints.length) {
+            this.game.dialogue(DREY, ['Drey: "Told you. My wheelman owns this beach. Run it again."']);
+            this.game.notify('The rival finished first — race reset!');
+            this._enterStep();
+          } else if (ss.t <= 0) {
+            this.game.notify('Out of time — race reset!');
+            this._enterStep();
+          }
+        }
+        break;
+      }
       case 'collect': {
         for (const it of this.stepState.items) {
           if (it.taken) continue;

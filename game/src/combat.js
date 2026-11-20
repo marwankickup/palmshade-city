@@ -50,8 +50,9 @@ export class Combat {
     }
   }
   // Player fires from the camera centre. callbacks: {ped, car, hostile, miss}
-  tryShoot(camera, muzzlePos, cb) {
-    this.raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+  // ndc: optional aim offset (SMG spread) in normalized device coords.
+  tryShoot(camera, muzzlePos, cb, ndc = null) {
+    this.raycaster.setFromCamera(ndc || { x: 0, y: 0 }, camera);
     const hits = this.raycaster.intersectObjects(this.targets, true);
     let end = null, found = null;
     for (const h of hits) {

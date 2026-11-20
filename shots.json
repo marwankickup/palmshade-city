@@ -1,6 +1,1 @@
-[
-  { "name": "01-cover.jpg", "query": "?shot=cover&seed=1" },
-  { "name": "02-on-foot.jpg", "query": "?shot=foot&seed=1" },
-  { "name": "03-mission.jpg", "query": "?shot=mission&seed=1" },
-  { "name": "04-chase.jpg", "query": "?shot=chase&seed=1" }
-]
+[{"name":"01-cover.jpg","query":"?shot=cover&seed=1"},{"name":"02-boat.jpg","query":"?shot=boat&seed=1"},{"name":"03-race.jpg","query":"?shot=race&seed=1"},{"name":"04-chase.jpg","query":"?shot=chase&seed=1"}]

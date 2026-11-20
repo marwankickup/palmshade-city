@@ -82,6 +82,7 @@ export class Peds {
   }
   update(dt, dangers = []) {
     for (const ped of this.list) {
+      if (ped.state === 'gone') continue; // riding in a taxi — hidden until dropped off
       if (ped.state === 'down') {
         ped.downT -= dt;
         if (ped.downT <= 0) { ped.fig.rotation.x = 0; ped.fig.position.y = 0; this.respawn(ped); }

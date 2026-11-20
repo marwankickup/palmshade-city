@@ -59,6 +59,8 @@
   #speedo { text-align: right; text-shadow: 0 2px 6px rgba(0,0,0,0.75); }
   #speedVal { font-size: 42px; font-weight: 800; line-height: 0.95; }
   #speedo .unit { font-size: 12px; letter-spacing: 2px; color: #c8d2dc; font-weight: 700; }
+  #activityPanel { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 5; padding: 7px 16px; font-size: 14px; font-weight: 700; color: #ffe9a8; pointer-events: none; white-space: nowrap; }
+  #activityPanel b { color: #3ec6ff; letter-spacing: 1px; }
   /* ---------- centre ---------- */
   #crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); z-index: 4; pointer-events: none; }
   #crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(255,255,255,0.9); box-shadow: 0 0 4px rgba(0,0,0,0.8); }
@@ -110,10 +112,10 @@
       <div id="weaponSlots">
         <div class="ws" data-slot="1"><div class="n">1</div><div class="w">FISTS</div><div class="a">∞</div></div>
         <div class="ws active" data-slot="2"><div class="n">2</div><div class="w">SIDEARM</div><div class="a">∞</div></div>
-        <div class="ws locked" data-slot="3"><div class="n">3</div><div class="w">LOCKED</div><div class="a">—</div></div>
+        <div class="ws" data-slot="3"><div class="n">3</div><div class="w">SMG</div><div class="a">∞</div></div>
         <div class="ws locked" data-slot="4"><div class="n">4</div><div class="w">LOCKED</div><div class="a">—</div></div>
       </div>
-      <div id="packages">📦 0 / 10 packages</div>
+      <div id="packages">📦 0 / 20 packages</div>
     </div>
     <div id="blStack">
       <div><div class="barLabel">HEALTH</div><div class="bar"><div id="healthFill"></div></div></div>
@@ -128,6 +130,7 @@
       </div>
       <div id="speedo"><span id="speedVal">0</span> <span class="unit">MPH</span></div>
     </div>
+    <div id="activityPanel" class="panel hidden"><span id="activityText"></span></div>
     <div id="crosshair" class="hidden"></div>
     <div id="prompt" class="panel hidden"></div>
     <div id="bustedWrap" class="hidden"><div class="bl">BUSTED</div><div id="bustedBar"><div id="bustedFill"></div></div></div>
@@ -141,12 +144,12 @@
   <!-- MENU -->
   <div id="menu" class="overlay">
     <h1>PALMSHADE<br>CITY</h1>
-    <div class="sub">A sun-soaked coastal city, one café at war with the Breakwater Boys, and you — the new runner. Seven jobs for Marisol Vega stand between you and the top of the beach.</div>
+    <div class="sub">A sun-soaked coastal city, one café at war with the Breakwater Boys, and you — the new runner. Ten jobs for Marisol Vega and Captain Dario stand between you and the top of the beach — by car, on foot, and by boat. Street races and taxi fares pay the rest.</div>
     <button id="btnPlay" class="btn">▶ PLAY</button>
     <button id="btnContinue" class="btn ghost hidden">CONTINUE</button>
     <div class="controls">
       <b>W A S D</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> camera &nbsp;·&nbsp; <b>Click</b> shoot (on foot)<br>
-      <b>E</b> talk / enter &amp; exit car &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>1/2</b> weapon &nbsp;·&nbsp; <b>P / Esc</b> pause
+      <b>E</b> talk / enter &amp; exit car or boat &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>R</b> radio &nbsp;·&nbsp; <b>1/2/3</b> weapon &nbsp;·&nbsp; <b>P / Esc</b> pause
     </div>
   </div>
   <!-- PAUSE -->

@@ -3,10 +3,12 @@ import * as THREE from 'three';
 import { buildCity, updateCity, landmarks, packageSpots } from './city.js';
 import { Player } from './player.js';
 import { createCar, cars, spawnParkedCars, flashLights } from './vehicles.js';
+import { createBoat } from './boats.js';
 import { Traffic } from './traffic.js';
 import { Peds } from './peds.js';
 import { Police } from './police.js';
-import { Missions, MARISOL } from './missions.js';
+import { Missions, MARISOL, DARIO } from './missions.js';
+import { Activities } from './activities.js';
 import { Combat } from './combat.js';
 import { Collectibles } from './collectibles.js';
 import { Minimap } from './minimap.js';
@@ -54,6 +56,7 @@ const G = {
   scene, landmarks,
 };
 G.inCar = () => !!G.currentCar;
+G.inBoat = () => !!G.currentCar && G.currentCar.type === 'boat';
 G.entityPos = () => G.currentCar
   ? { x: G.currentCar.group.position.x, y: 0, z: G.currentCar.group.position.z }
   : { x: player.pos.x, y: player.y, z: player.pos.z };
@@ -84,6 +87,8 @@ G.player = player;
 const vanCar = createCar(scene, 'van', landmarks.vanSpawn.x, landmarks.vanSpawn.z, landmarks.vanSpawn.heading, 0xd9a441);
 vanCar.driver = 'mission';
 G.vanCar = vanCar;
+const boat = createBoat(scene, landmarks.boatDock.x, landmarks.boatDock.z, Math.PI / 2);
+G.boat = boat;
 spawnParkedCars(scene);
 const traffic = new Traffic(scene, 9);
 const peds = new Peds(scene, 26);
@@ -91,6 +96,8 @@ const police = new Police(scene);
 const combat = new Combat(scene);
 G.combat = combat;
 const minimap = new Minimap($('minimap'));
+const activities = new Activities(G, peds);
+G.activities = activities;
 let missions = null, collectibles = null;
 
 // ---------- crimes & wanted ----------
@@ -137,10 +144,16 @@ function enterCar(car) {
 function exitCar() {
   const car = G.currentCar; if (!car) return;
   const p = car.group.position;
-  const rx = Math.cos(car.heading), rz = -Math.sin(car.heading);
-  player.teleport(p.x + rx * 2.4, p.z + rz * 2.4, car.heading);
+  if (car.type === 'boat') {
+    // step off onto the marina dock, never into the water
+    player.teleport(250, 0, -Math.PI / 2);
+    G.notify('Back on dry land.');
+  } else {
+    const rx = Math.cos(car.heading), rz = -Math.sin(car.heading);
+    player.teleport(p.x + rx * 2.4, p.z + rz * 2.4, car.heading);
+  }
   player.group.visible = true;
-  if (car.driver === 'player') car.driver = 'parked';
+  if (car.driver === 'player') car.driver = car.type === 'boat' ? 'boat' : 'parked';
   G.currentCar = null;
   audio.setEngine(false, 0);
 }
@@ -148,6 +161,8 @@ function doInteract() {
   if (G.state.mode !== 'playing') return;
   if (G.inCar()) { exitCar(); return; }
   if (missions && missions.interact()) return;
+  const bp = boat.group.position;
+  if (dist2d(bp.x, bp.z, player.pos.x, player.pos.z) < 7.5) { enterCar(boat); return; }
   const c = nearestCar();
   if (c) enterCar(c);
 }
@@ -188,7 +203,7 @@ function startGame(fromSave) {
     G.state.money = save.money;
     G.state.missionIndex = save.missionIndex;
     G.state.chainFinished = save.finished;
-    G.state.missionsCompleted = save.finished ? 7 : save.missionIndex;
+    G.state.missionsCompleted = save.finished ? 10 : save.missionIndex;
     G.rewardMul = save.finished ? 1.5 : 1;
     G.state.packages = new Set(save.packages);
   }
@@ -197,7 +212,7 @@ function startGame(fromSave) {
     collectibles = new Collectibles(scene, packageSpots, [...G.state.packages], id => {
       G.state.packages.add(id);
       G.addMoney(100);
-      G.notify(`📦 Package ${G.state.packages.size}/10 — +$100`);
+      G.notify(`📦 Package ${G.state.packages.size}/20 — +$100`);
       audio.chime();
       G.saveGame();
     });
@@ -238,6 +253,7 @@ addEventListener('keydown', e => {
     if (e.code === 'KeyR' && G.inCar()) cycleStation();
     if (e.code === 'Digit1') setWeapon(1);
     if (e.code === 'Digit2') setWeapon(2);
+    if (e.code === 'Digit3') setWeapon(3);
   } else if (G.state.mode === 'paused' && (e.code === 'KeyP' || e.code === 'Escape')) {
     $('pauseMenu').classList.add('hidden'); G.state.mode = 'playing';
   }
@@ -278,6 +294,7 @@ function cycleStation() {
 
 // ---------- shooting ----------
 function shoot() {
+  const smg = G.weapon === 3;
   const dir = camera.getWorldDirection(new THREE.Vector3());
   const muzzle = camera.position.clone().addScaledVector(dir, 1.1);
   muzzle.y -= 0.12;
@@ -285,19 +302,20 @@ function shoot() {
   const ep = G.entityPos();
   peds.scare(ep.x, ep.z, 30);
   combat.targets.length = 0;
-  for (const p of peds.list) combat.register(p.fig.group, 'ped', p);
+  for (const p of peds.list) combat.register(p.group, 'ped', p);
   for (const c of cars) combat.register(c.group, 'car', c);
   for (const h of combat.hostiles) if (!h.dead) combat.register(h.group, 'hostile', h);
+  const ndc = smg ? { x: (Math.random() - 0.5) * 0.085, y: (Math.random() - 0.5) * 0.085 } : null;
   combat.tryShoot(camera, muzzle, {
     ped: (ped) => { peds.hit(ped, 100); crime('hitPed', ep.x, ep.z); },
     car: (car) => {
-      car.health -= 14;
+      car.health -= smg ? 8 : 14;
       if (car.type === 'police') { G.wanted = clamp(G.wanted + 1, 0, 5); G.lastCrimeT = G.time; police.ensure(G.wanted, ep); }
       else crime('shot', ep.x, ep.z);
     },
-    hostile: (h) => { combat.damageHostile(h, 34); if (h.dead) G.notify('Breakwater Boy down'); },
+    hostile: (h) => { combat.damageHostile(h, smg ? 17 : 34); if (h.dead) G.notify('Breakwater Boy down'); },
     miss: () => crime('shot', ep.x, ep.z),
-  });
+  }, ndc);
 }
 
 // ---------- HUD ----------
@@ -320,13 +338,13 @@ function updateHUD(dt) {
     lastStars = G.wanted;
     $('stars').innerHTML = '★'.repeat(G.wanted) + '<span class="off">' + '★'.repeat(5 - G.wanted) + '</span>';
   }
-  $('packages').textContent = `📦 ${G.state.packages.size} / 10 packages`;
+  $('packages').textContent = `📦 ${G.state.packages.size} / 20 packages`;
   $('healthFill').style.width = clamp(player.health, 0, 100) + '%';
   $('vehicleWrap').style.display = G.inCar() ? '' : 'none';
   if (G.inCar()) $('vehicleFill').style.width = clamp(G.currentCar.health, 0, 100) + '%';
   const done = G.state.missionsCompleted;
   $('respectRank').textContent = RANKS[Math.min(done, 5)];
-  $('respectFill').style.width = clamp((done * 10 + G.state.packages.size) / 70 * 100, 0, 100) + '%';
+  $('respectFill').style.width = clamp((done * 10 + G.state.packages.size) / 120 * 100, 0, 100) + '%';
   $('speedVal').textContent = G.shotSpeedo !== null ? G.shotSpeedo : Math.round(Math.abs(G.entitySpeed()) * 2.24);
   if (missions) {
     $('missionTitle').textContent = missions.mission().title + (G.state.chainFinished ? ' · REPLAY ×1.5' : '');
@@ -335,9 +353,12 @@ function updateHUD(dt) {
   $('radioCard').classList.toggle('muted', !G.inCar());
   let prompt = '';
   if (G.state.mode === 'playing' && !SHOT) {
-    if (G.inCar()) { if (Math.abs(G.currentCar.speed) < 2.5) prompt = '<b>E</b> — Exit vehicle'; }
-    else if (missions && missions.step() && missions.step().type === 'talk' &&
-      dist2d(player.pos.x, player.pos.z, landmarks.marisol.x, landmarks.marisol.z) < 3.6) prompt = '<b>E</b> — Talk to Marisol';
+    if (G.inCar()) { if (Math.abs(G.currentCar.speed) < 2.5) prompt = G.inBoat() ? '<b>E</b> — Step off at the dock' : '<b>E</b> — Exit vehicle'; }
+    else if (missions && missions.step() && missions.step().type === 'talk' && missions.talkTarget() &&
+      dist2d(player.pos.x, player.pos.z, missions.talkTarget().x, missions.talkTarget().z) < 3.6) {
+      prompt = missions.step().who === 'dario' ? '<b>E</b> — Talk to Captain Dario' : '<b>E</b> — Talk to Marisol';
+    }
+    else if (dist2d(boat.group.position.x, boat.group.position.z, player.pos.x, player.pos.z) < 7.5) prompt = '<b>E</b> — Board the “Brisa”';
     else { const c = nearestCar(); if (c) prompt = `<b>E</b> — Enter ${c.type}`; }
   }
   const pr = $('prompt');
@@ -389,12 +410,12 @@ function updatePlaying(dt) {
     if (keys.has('KeyA') || keys.has('ArrowLeft')) { mx -= r.x; mz -= r.z; }
     player.update(dt, mx, mz, keys.has('ShiftLeft') || keys.has('ShiftRight'));
     audio.setEngine(false, 0);
-    if (mouseDown && G.weapon === 2) {
+    if (mouseDown && G.weapon >= 2) {
       G.fireT -= dt;
-      if (G.fireT <= 0) { G.fireT = 0.17; shoot(); }
+      if (G.fireT <= 0) { G.fireT = G.weapon === 3 ? 0.085 : 0.17; shoot(); }
     } else G.fireT = 0;
   }
-  $('crosshair').classList.toggle('hidden', !(G.weapon === 2 && !G.inCar()));
+  $('crosshair').classList.toggle('hidden', !(G.weapon >= 2 && !G.inCar()));
   const dangers = cars.filter(c => Math.abs(c.speed) > 6).map(c => ({ x: c.group.position.x, z: c.group.position.z, speed: c.speed }));
   traffic.update(dt, ep, cars);
   peds.update(dt, dangers);
@@ -415,6 +436,8 @@ function updatePlaying(dt) {
   if (G.wanted > 0) police.ensure(G.wanted, G.entityPos());
   audio.setSiren(G.wanted > 0 && police.nearestDist(G.entityPos()) < 55);
   if (missions) missions.update(dt, G.time);
+  activities.update(dt, G.time);
+  if (G.currentCar !== boat) boat.update(dt, 0, 0);
   if (collectibles) collectibles.update(dt, ep.x, G.inCar() ? 0 : player.y, ep.z, G.time);
   combat.update(dt, {
     playerPos: { x: player.pos.x, z: player.pos.z },
@@ -537,19 +560,54 @@ function stageShot(name) {
     placePed(1, 164.5, -27.5, -2.2);
     placePed(2, 190, -44, -Math.PI / 2);
     G.shotCam = { pos: new THREE.Vector3(177.5, 2.5, -51.5), look: new THREE.Vector3(168, 1.2, -42) };
+  } else if (name === 'boat') {
+    // The Brisa at speed off the marina, city skyline behind her.
+    boat.group.position.set(301, -0.12, 39);
+    boat.heading = -2.25; boat.group.rotation.y = -2.25;
+    boat.driver = 'player'; G.currentCar = boat; player.group.visible = false;
+    boat.speed = 13;
+    for (let i = 0; i < 7; i++) boat.update(0.13, 1, 0); // lay a foam wake behind her
+    if (missions) { missions.index = 7; missions.stepIdx = 2; missions._enterStep(); }
+    G.dialogue(DARIO, ['Dario: "Easy on the throttle past the pier — run it out past the south buoy, and bring my Brisa home."']);
+    placePed(0, 240, -14, Math.PI / 2);
+    placePed(1, 238, 12, -0.5);
+    G.shotSpeedo = 21;
+    G.shotCam = { pos: new THREE.Vector3(308, 4.2, 46), look: new THREE.Vector3(289, 0.7, 29) };
+  } else if (name === 'race') {
+    // Street race mid-run on the north straight: rival alongside, CP pillar ahead.
+    const hero = heroAt(createCar(scene, 'sport', 34, -116.8, -Math.PI / 2, 0xd23b2e), 34, -116.8, -Math.PI / 2);
+    hero.driver = 'player'; G.currentCar = hero; player.group.visible = false;
+    heroAt(createCar(scene, 'sport', 39.5, -123.4, -Math.PI / 2, 0x22262c), 39.5, -123.4, -Math.PI / 2).driver = 'parked';
+    extraCar('sedan', 12, -110.5, -Math.PI / 2, 0x2ea6a0);
+    extraCar('pickup', -28, -110.5, -Math.PI / 2, 0x7a4fd0);
+    placePed(0, 26, -108.5, Math.PI);
+    placePed(1, 44, -131, 0.3);
+    activities.stageRace(hero);
+    G.shotSpeedo = 58;
+    G.shotCam = { pos: new THREE.Vector3(49, 4.6, -107.5), look: new THREE.Vector3(8, 1.1, -119.5) };
   } else if (name === 'chase') {
-    // Same boulevard, further south: boxed-in hero, heli overhead.
+    // Dusk on the boulevard: boxed-in hero, roadblock ahead, heli overhead.
     const hero = heroAt(createCar(scene, 'sedan', 180, 36, Math.PI, 0x2e7fd9), 180, 36, Math.PI);
     hero.driver = 'player'; G.currentCar = hero; player.group.visible = false;
     heroAt(createCar(scene, 'police', 175.6, 34.6, Math.PI - 0.1), 175.6, 34.6, Math.PI - 0.1).driver = 'parked';
     heroAt(createCar(scene, 'police', 183.4, 43.8, Math.PI + 0.3), 183.4, 43.8, Math.PI + 0.3).driver = 'parked';
     heroAt(createCar(scene, 'police', 185.2, 28.5, Math.PI + 0.5), 185.2, 28.5, Math.PI + 0.5).driver = 'parked';
+    // the roadblock: two interceptors parked sideways across the road ahead
+    heroAt(createCar(scene, 'police', 176.6, 14.5, Math.PI / 2 + 0.14), 176.6, 14.5, Math.PI / 2 + 0.14).driver = 'parked';
+    heroAt(createCar(scene, 'police', 183.8, 14.0, Math.PI / 2 - 0.12), 183.8, 14.0, Math.PI / 2 - 0.12).driver = 'parked';
     extraCar('convertible', 186.5, 4, 0, 0xf2b035);
     placePed(0, 190.5, 30, -Math.PI / 2);
     placePed(1, 170.5, 44, Math.PI);
-    G.wanted = 5; G.bustedMeter = 0.35; G.shotSpeedo = 41;
+    G.wanted = 5; G.bustedMeter = 0.45; G.shotSpeedo = 41;
     police.setHeliForced(true, { x: 180, z: 36 });
     if (police.heli) { police.heli.group.position.set(172, 17, 22); police.heli.group.lookAt(180, 0, 36); }
+    // dusk grade: dimmer sky light, low sun for long shadows, headlights pop
+    renderer.toneMappingExposure = 1.0;
+    scene.traverse(o => {
+      if (o.isHemisphereLight) o.intensity = 0.5;
+      else if (o.isAmbientLight) o.intensity = 0.22;
+      else if (o.isDirectionalLight && o.castShadow) { o.intensity = 1.2; o.position.set(-340, 85, -120); }
+    });
     G.shotCam = { pos: new THREE.Vector3(176.2, 2.8, 43.2), look: new THREE.Vector3(180.2, 1.05, 35.4) };
   } else { // beach
     player.teleport(234, -18, Math.PI / 3);
@@ -583,6 +641,7 @@ function animate() {
       player: { x: G.entityPos().x, z: G.entityPos().z, heading: G.inCar() ? G.currentCar.heading : player.heading },
       traffic: traffic.units.map(u => u.car), police: police.units.map(u => u.car),
       target: missions ? missions.currentTarget() : null,
+      extras: activities.blips(),
       packages: collectibles ? collectibles.remaining() : [],
     });
   }
@@ -606,7 +665,12 @@ window.__game = {
     stepType: missions && missions.step() ? missions.step().type : null,
     objective: missions ? missions.objectiveText() : '',
     packages: G.state.packages.size, missionsCompleted: G.state.missionsCompleted,
-    inCar: G.inCar(), health: player.health, bustedMeter: Math.round(G.bustedMeter * 100) / 100,
+    inCar: G.inCar(), inBoat: G.inBoat(), health: player.health, bustedMeter: Math.round(G.bustedMeter * 100) / 100,
+    boatPos: { x: boat.group.position.x, z: boat.group.position.z },
+    race: { active: activities.race.active, cp: activities.race.cp, t: Math.round(activities.race.t * 10) / 10, best: activities.race.best },
+    taxi: activities.taxi.phase,
+    taxiPed: activities.taxi.ped ? { x: Math.round(activities.taxi.ped.x), z: Math.round(activities.taxi.ped.z) } : null,
+    weapon: G.weapon,
     policeCount: police.units.length,
     nearestPolice: (() => { const d = police.nearestDist(G.entityPos()); return d === Infinity ? -1 : Math.round(d); })(),
     pos: G.entityPos(), playerY: player.y,
@@ -623,5 +687,8 @@ window.__game = {
   setTimeScale: s => { G.timeScale = s; },
   forceBusted: () => { G.bustedMeter = 1; },
   damagePlayer: n => player.damage(n),
-  version: 'palmshade-city-1',
+  setMission: i => { if (missions) { missions.index = i; missions.stepIdx = 0; missions._enterStep(); } },
+  advanceStep: () => { if (missions) missions._advance(); },
+  startRace: () => activities._startRace(),
+  version: 'palmshade-city-2',
 };

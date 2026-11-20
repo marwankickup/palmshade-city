@@ -35,6 +35,12 @@ export class Minimap {
       if (Math.abs(p.x - s.player.x) < 170 && Math.abs(p.z - s.player.z) < 170) dot(p.x, p.z, '#ff9d2e', 2.4);
     }
     if (s.traffic) for (const c of s.traffic) dot(c.group.position.x, c.group.position.z, '#9aa3ad', 2.2);
+    // side-activity blips (race checkpoints, taxi pickup / drop-off)
+    if (s.extras) for (const b of s.extras) {
+      dot(b.x, b.z, b.color, b.r || 3);
+      ctx.strokeStyle = b.color; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(this._px(b.x, W), this._px(b.z, H), (b.r || 3) + 2.2 + Math.sin(this.t * 5) * 0.8, 0, Math.PI * 2); ctx.stroke();
+    }
     if (s.police) for (const u of s.police) {
       dot(u.group.position.x, u.group.position.z, (this.t % 0.6) < 0.3 ? '#ff4444' : '#4488ff', 3);
     }
