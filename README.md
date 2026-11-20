@@ -1,10 +1,10 @@
 # Palmshade City
 
-![make.fun bounty](https://make.fun/badge/gta6-01.svg)
+![make.fun gta6-01](https://make.fun/badge/gta6-01.svg)
 ![rank](https://make.fun/badge/gta6-01/marwankickup/palmshade-city/rank.svg)
 ![reward](https://make.fun/badge/gta6-01/marwankickup/palmshade-city/reward.svg)
 
-An entry for the make.fun bounty **"Make GTA 6"**: https://make.fun/bounty/gta6-01
+An original open-world crime caper that runs entirely in your desktop browser — no downloads, no build step, no network requests. My entry for the make.fun bounty [gta6-01 "Make GTA 6"](https://make.fun/bounty/gta6-01).
 
 ## About
 
