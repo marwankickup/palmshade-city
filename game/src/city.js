@@ -214,7 +214,7 @@ export function buildCity(scene) {
   scene.add(water);
 
   // ---------- buildings ----------
-  const facades = [facadeTextures('#8a5a48', 0.5), facadeTextures('#5d6d7e', 0.62), facadeTextures('#a08364', 0.45), facadeTextures('#746a8a', 0.55)];
+  const facades = [facadeTextures('#8a5a48', 0.68), facadeTextures('#5d6d7e', 0.78), facadeTextures('#a08364', 0.62), facadeTextures('#746a8a', 0.72)];
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x3c4046, roughness: 1 });
   const reserved = new Set(['150,-30', '-30,-150', '-150,150', '90,90', '-30,30']);
   function building(x, z, w, d, h, fi) {
@@ -404,7 +404,7 @@ export function buildCity(scene) {
       spots.push({ x: r + s * 9.6, z: -100 + rng() * 200 });
       spots.push({ x: -100 + rng() * 200, z: r + s * 9.6 });
     }
-    for (const s of spots.slice(0, 26)) {
+    for (const s of spots) {
       const kind = rng();
       if (kind < 0.4) { box(benchM, 2, 0.5, 0.6, s.x, 0.45, s.z, scene); addCollider(s.x, s.z, 2, 0.6, 0.5); }
       else if (kind < 0.7) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1, 8), binM); b.position.set(s.x, 0.5, s.z); b.castShadow = true; scene.add(b); }
@@ -451,6 +451,44 @@ export function buildCity(scene) {
     billboard(194, -56, Math.PI / 2, 'BRISA COLA', 'TASTE THE SUNSET', '#8e2318', '#ffd9a0');
     billboard(194, 96, Math.PI / 2, 'ONDAS GRAND', 'SLEEP BY THE SEA', '#14425e', '#bfe6ff');
     billboard(-70, -104, 0.5, 'PALMSHADE MOTORS', 'OWN THE BOULEVARD', '#20301e', '#c8ffb0');
+  }
+  // ---------- v11 density: market stalls, crate stacks, daylight signs ----------
+  {
+    const stallCols = [0xe2725b, 0x3ec6ff, 0xffd23e, 0x53a06b, 0xe14b8a];
+    const woodM = new THREE.MeshStandardMaterial({ color: 0x7d5c39, roughness: 1 });
+    const crateM2 = new THREE.MeshStandardMaterial({ color: 0xa87c4c, roughness: 0.95 });
+    [[196, -96], [196, -64], [196, 52], [196, 84], [132, -52], [-52, 8]].forEach(([sx, sz], i) => {
+      const cm = new THREE.MeshStandardMaterial({ color: stallCols[i % stallCols.length], roughness: 0.85 });
+      box(woodM, 3.4, 1.0, 2.0, sx, 0.5, sz, scene);
+      for (const px2 of [-1.5, 1.5]) for (const pz2 of [-0.85, 0.85]) box(woodM, 0.14, 2.3, 0.14, sx + px2, 1.15, sz + pz2, scene);
+      const canopy = box(cm, 3.9, 0.14, 2.5, sx, 2.35, sz, scene); canopy.rotation.z = 0.06;
+      box(crateM2, 0.8, 0.8, 0.8, sx - 1.0, 1.4, sz, scene);
+      box(crateM2, 0.7, 0.7, 0.7, sx + 0.7, 1.35, sz + 0.3, scene);
+      box(cm, 0.9, 0.35, 0.9, sx + 0.1, 1.2, sz - 0.4, scene);
+      addCollider(sx, sz, 3.4, 2.0, 1.0);
+    });
+    const barrelM = new THREE.MeshStandardMaterial({ color: 0x3f6fb5, roughness: 0.7 });
+    [[-128, 128], [-172, 118], [216, 32], [104, 68], [60, -96], [-96, -52]].forEach(([sx, sz]) => {
+      box(crateM2, 1.6, 1.6, 1.6, sx, 0.8, sz, scene);
+      box(crateM2, 1.3, 1.3, 1.3, sx + 0.4, 2.25, sz, scene);
+      box(crateM2, 1.5, 1.5, 1.5, sx + 1.9, 0.75, sz + 0.6, scene);
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.3, 10), barrelM);
+      b.position.set(sx - 1.6, 0.65, sz + 0.8); b.castShadow = true; scene.add(b);
+      addCollider(sx, sz, 2.2, 2.2, 1.6);
+    });
+    const poleM2 = new THREE.MeshStandardMaterial({ color: 0x2f353c, roughness: 0.8 });
+    const signs = [
+      ['NEON PALMS', '#ff4fd8', 190, -96], ['HOTEL BRISA', '#3ec6ff', 190, 36],
+      ['CLUB FAROS', '#ff9f45', 190, 96], ['MARINA BAR', '#ff5f4a', 190, -36],
+      ['TACO SOL', '#7ddf7d', -96, -68], ['CINE ONDA', '#c792ff', 68, 128],
+    ];
+    for (const [txt, col, nx, nz] of signs) {
+      box(poleM2, 0.28, 6.4, 0.28, nx, 3.2, nz, scene);
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.9),
+        new THREE.MeshBasicMaterial({ map: signTexture(txt, '#101018', col), side: THREE.DoubleSide }));
+      s.position.set(nx, 5.6, nz); s.rotation.y = Math.PI / 2; s.userData.neon = true; scene.add(s);
+      addCollider(nx, nz, 0.5, 0.5, 3);
+    }
   }
   // ---------- Palms (instanced) ----------
   {

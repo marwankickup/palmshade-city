@@ -18,8 +18,13 @@ their turf war with the Breakwater Boys.
   run, a marina pickup, a warehouse shootout, a boat delivery across the bay, a
   checkpoint street race against Drey's wheelman, and a rooftop finale on
   Warehouse 7 — replayable at a ×1.5 payout.
+- **Denser city (v11)**: 13 traffic cars, 34 pedestrians, market stalls along
+  the promenade, crate and barrel stacks, every street-prop spot filled
+  (benches, bins, hydrants), brighter facades with more lit windows, and
+  freestanding signs that read in full daylight — all in the same bright
+  golden-hour look, with four re-staged bright screenshots.
 - A living city with real-time shadows and golden-hour atmosphere: AI traffic,
-  26 pedestrians, parked cars you can take, animated marina water, billboards,
+  34 pedestrians, parked cars you can take, animated marina water, billboards,
   beach umbrellas and loungers, and a Palmshade PD that answers witnessed crimes
   with a 0–5 star wanted system — pursuit units with callsigns and roles shown
   live in the **Police Response Panel**, roadblocks and the **AIR-1 helicopter**

@@ -21,7 +21,8 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 const ENTRY_TITLE = 'Palmshade City';
-console.log(`Packing entry: ${ENTRY_TITLE} — an original open-world crime game for make.fun gta6-01`);
+const ENTRY_VERSION = 'v11'; // Palmshade City v11: v9 base + bright density pass, re-staged bright screenshots
+console.log(`Packing entry: ${ENTRY_TITLE} ${ENTRY_VERSION} — an original open-world crime game for make.fun gta6-01`);
 
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });

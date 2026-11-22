@@ -113,8 +113,8 @@ G.vanCar = vanCar;
 const boat = createBoat(scene, landmarks.boatDock.x, landmarks.boatDock.z, Math.PI / 2);
 G.boat = boat;
 spawnParkedCars(scene);
-const traffic = new Traffic(scene, 9);
-const peds = new Peds(scene, 26);
+const traffic = new Traffic(scene, 13);
+const peds = new Peds(scene, 34);
 const police = new Police(scene);
 const combat = new Combat(scene);
 G.combat = combat;
@@ -645,6 +645,11 @@ function stageShot(name) {
     extraCar('sedan', 186.5, -48, 0, 0x2ea6a0);
     extraCar('sport', 174.5, -64, Math.PI, 0xf2b035);
     extraCar('pickup', 186.5, -82, 0, 0x7a4fd0);
+    extraCar('convertible', 186.5, 6, 0, 0x53a06b);
+    extraCar('van', 174.5, -100, Math.PI, 0xe8e4da);
+    placePed(3, 190.5, -52, -Math.PI / 2);
+    placePed(4, 170.5, -58, 0.9);
+    placePed(5, 190.5, 2, Math.PI / 2);
     placePed(0, 190.5, -27, -Math.PI / 2);
     placePed(1, 190.5, -11, Math.PI / 2);
     placePed(2, 170.5, -36, 0.4);
@@ -659,10 +664,17 @@ function stageShot(name) {
     player.teleport(170.5, -20, -1.2);
     extraCar('sedan', 186, -28, 0.05, 0x3f9be0);
     extraCar('sport', 180.5, -42, Math.PI, 0xe14b8a);
+    extraCar('pickup', 186.5, -58, 0, 0x7a4fd0);
+    extraCar('convertible', 174.5, -6, Math.PI, 0x53a06b);
+    extraCar('van', 186.5, 8, 0, 0xe8e4da);
     placePed(0, 173.5, -24.5, 2.6);
     placePed(1, 168.2, -15.2, -0.6);
     placePed(2, 172.8, -12.8, 3.0);
     placePed(3, 190, -26, -Math.PI / 2);
+    placePed(4, 190.5, -44, -Math.PI / 2);
+    placePed(5, 169.5, -32, 1.1);
+    placePed(6, 190.5, -8, Math.PI / 2);
+    placePed(7, 171.5, -48, -0.4);
     G.shotCam = { pos: new THREE.Vector3(175.6, 2.0, -16.2), look: new THREE.Vector3(169.6, 1.25, -20.8) };
   } else if (name === 'mission') {
     vanCar.group.position.set(169, 0, -43); vanCar.heading = 0.35; vanCar.group.rotation.y = 0.35;
@@ -694,6 +706,8 @@ function stageShot(name) {
     G.dialogue(DARIO, ['Dario: "Easy on the throttle past the pier — run it out past the south buoy, and bring my Brisa home."']);
     placePed(0, 240, -14, Math.PI / 2);
     placePed(1, 238, 12, -0.5);
+    placePed(2, 246, 26, -1.2);
+    placePed(3, 232, -28, 0.6);
     G.shotSpeedo = 21;
     G.shotCam = { pos: new THREE.Vector3(308, 4.2, 46), look: new THREE.Vector3(289, 0.7, 29) };
   } else if (name === 'race') {
@@ -734,13 +748,9 @@ function stageShot(name) {
     const cu3 = police.spawnUnit({ x: 180, z: 36 }); cu3.role = 'RAM';
     police.setHeliForced(true, { x: 180, z: 36 });
     if (police.heli) { police.heli.group.position.set(172, 17, 22); police.heli.group.lookAt(180, 0, 36); }
-    // dusk grade: dimmer sky light, low sun for long shadows, headlights pop
-    renderer.toneMappingExposure = 1.0;
-    scene.traverse(o => {
-      if (o.isHemisphereLight) o.intensity = 0.5;
-      else if (o.isAmbientLight) o.intensity = 0.22;
-      else if (o.isDirectionalLight && o.castShadow) { o.intensity = 1.2; o.position.set(-340, 85, -120); }
-    });
+    // v11: bright daylight grade — keep the golden-hour exposure from above,
+    // no dusk dimming, so the police action reads clearly in full sun
+    renderer.toneMappingExposure = 1.34;
     G.shotCam = { pos: new THREE.Vector3(176.2, 2.8, 43.2), look: new THREE.Vector3(180.2, 1.05, 35.4) };
   } else { // beach
     player.teleport(234, -18, Math.PI / 3);
@@ -804,6 +814,7 @@ window.__game = {
     taxi: activities.taxi.phase,
     taxiPed: activities.taxi.ped ? { x: Math.round(activities.taxi.ped.x), z: Math.round(activities.taxi.ped.z) } : null,
     weapon: G.weapon,
+    pedCount: peds.list.length, trafficCount: traffic.units.length,
     upgrades: { ...G.upgrades },
     standing: { ...G.standing },
     district: G.districtAt(G.entityPos().x),
@@ -848,5 +859,5 @@ window.__game = {
   damageNearestCar: n => { const c = nearestCar(9); if (c) { c.health = n; } return !!c; },
   spikeHere: () => police.debugSpikeAt(G.entityPos()),
   setCarHealth: n => { if (G.currentCar) G.currentCar.health = n; },
-  version: 'palmshade-city-3',
+  version: 'palmshade-city-11',
 };
